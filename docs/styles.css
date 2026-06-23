@@ -168,6 +168,41 @@ button{font-family:inherit}
 .solic-row .meta{font-size:12.5px;color:var(--taupe);margin-top:2px}
 .solic-row .val{font-size:15px;font-weight:700;text-align:right}
 
+/* tabela de solicitações (mais novo em cima) — colunas no desktop, cartão no mobile */
+.qlist{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(57,57,59,.07);overflow:hidden;margin-top:12px}
+.qhead{display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr;gap:12px;align-items:center;padding:11px 16px;
+  font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--mist);
+  border-bottom:1px solid var(--line);background:#FBFAF9}
+.qhead .r{text-align:right}
+.qrow{display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr;gap:12px;align-items:center;padding:13px 16px;
+  border-bottom:1px solid var(--line);cursor:pointer;transition:background .12s ease}
+.qrow:last-child{border-bottom:none}
+.qrow:hover{background:#FBFAF9}
+.qrow .nome{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qrow .meta{font-size:12.5px;color:var(--taupe);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.q-dates{display:none}                 /* aparece só no mobile, dentro do meta */
+.q-date{font-size:13px;color:var(--chumbo)}
+.q-end{display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.q-val{font-size:14.5px;font-weight:700}
+.q-st{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:560px){
+  .qhead{display:none}
+  .qrow{grid-template-columns:1fr auto}
+  .q-date{display:none}                 /* no celular as datas vão para o meta */
+  .q-dates{display:inline}
+}
+
+/* caixa de busca/filtro (lupa + input) — ex.: tomadores */
+.filter-box{display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--line-2);
+  border-radius:10px;padding:10px 13px;margin-bottom:14px}
+.filter-box svg{width:18px;height:18px;color:var(--mist);flex:none}
+.filter-box input{border:none;background:none;outline:none;font-family:inherit;font-size:14px;width:100%;color:var(--grafite)}
+.empty-mini{text-align:center;color:var(--mist);font-size:13.5px;padding:30px 10px}
+/* linha de tomador agora é clicável (ver/editar) */
+.tom-row{cursor:pointer;transition:background .12s ease}
+.tom-row:hover{background:#FBFAF9}
+.tom-go{color:var(--mist);width:18px;flex:none;display:flex}
+
 /* barra de navegação inferior (mobile) — "Nova" virou item central (item 2) */
 .cli-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
   height:64px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;

@@ -8,7 +8,7 @@ import {
   fmtCompetencia, fmtCompetenciaShort, relTime, fmtDate, initials, badge,
   esc, toast, copyToClipboard, openEnvioEmail, openEnvioWhatsApp,
   ressalvaPill, notaPublicUrl, linkPublicoCard, bindLinkPublico,
-  toggle, bindToggle, isToggleOn, fmtDateTime
+  toggle, bindToggle, isToggleOn, fmtDateTime, openModal, closeModal
 } from './ui.js';
 
 let CTX = { profile:null, cliente:null, root:null, tab:'dashboard' };
@@ -188,7 +188,7 @@ async function showDashboard(){
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span class="section-title">Últimas solicitações</span>
       </div>
-      ${solics.length ? `<div class="solic-list">${solics.slice(0,12).map(rowSolic).join('')}</div>`
+      ${solics.length ? `<div class="qlist">${QHEAD}${solics.slice(0,12).map(rowQueue).join('')}</div>`
         : emptyState('file', 'Sua primeira nota começa aqui',
             'Você ainda não tem solicitações. Crie uma e a Maradel cuida da emissão.')}
     </div>`;
@@ -236,17 +236,30 @@ function renderChart(meses, porMes){
 function temRessalva(s){
   return !!s.tomador?.exige_numero_pedido && !String(s.numero_pedido||'').trim() && s.status!=='emitida' && s.status!=='cancelada';
 }
-function rowSolic(s){
+// Data de atendimento: quando emitida, a data de emissão da nota; senão "—".
+function dataAtendimento(s){
+  const nota = Array.isArray(s.nota) ? s.nota[0] : s.nota;
+  return (s.status==='emitida' && nota?.data_emissao) ? fmtDate(nota.data_emissao) : '—';
+}
+// Cabeçalho da tabela de solicitações (visível no desktop; some no mobile).
+const QHEAD = `<div class="qhead"><span>Tomador</span><span>Solicitada</span><span>Atendida</span><span class="r">Valor / Status</span></div>`;
+// Uma linha da tabela de solicitações. Mais novo em cima (a lista já vem
+// ordenada desc.). Mostra data da solicitação e data de atendimento.
+function rowQueue(s){
   const canceled = s.status==='cancelada';
+  const serv = (s.descricao||'').slice(0,40);
+  const dSol = fmtDate(s.created_at), dAt = dataAtendimento(s);
   return `
-    <div class="solic-row" data-solic="${s.id}">
-      <div style="flex:1;min-width:0">
+    <div class="qrow" data-solic="${s.id}">
+      <div class="q-main">
         <div class="nome">${esc(s.tomador?.nome||'Tomador')}</div>
-        <div class="meta">${esc(s.descricao.slice(0,28))}${s.descricao.length>28?'…':''} · ${relTime(s.created_at)}</div>
+        <div class="meta">${esc(serv)}${(s.descricao||'').length>40?'…':''}<span class="q-dates"> · ${dSol} → ${dAt}</span></div>
       </div>
-      <div style="flex:none">
-        <div class="val" style="${canceled?'color:var(--mist);text-decoration:line-through':''}">${brl(s.valor)}</div>
-        <div style="text-align:right;margin-top:5px;display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap">${temRessalva(s)?ressalvaPill():''}${badge(s.status)}</div>
+      <div class="q-date">${dSol}</div>
+      <div class="q-date">${dAt}</div>
+      <div class="q-end">
+        <div class="q-val" style="${canceled?'color:var(--mist);text-decoration:line-through':''}">${brl(s.valor)}</div>
+        <div class="q-st">${temRessalva(s)?ressalvaPill():''}${badge(s.status)}</div>
       </div>
     </div>`;
 }
@@ -270,7 +283,7 @@ async function showSolicitacoes(){
       ${resumo?`<div class="solic-resumo">${resumo}</div>`:''}
     </div>
     <div class="cli-body">
-      ${solics.length ? `<div class="solic-list">${solics.map(rowSolic).join('')}</div>`
+      ${solics.length ? `<div class="qlist">${QHEAD}${solics.map(rowQueue).join('')}</div>`
         : emptyState('list','Nenhuma solicitação ainda','Toque em "Nova solicitação" e a Maradel cuida da emissão.')}
     </div>`;
   view().querySelectorAll('[data-solic]').forEach(r =>
@@ -292,7 +305,7 @@ async function showNovaSolicitacao(){
       </div>`;
     view().querySelector('#ns-back').onclick = showDashboard;
     // Após cadastrar, volta direto para a nova solicitação.
-    view().querySelector('#ns-novo-tom').onclick = () => showNovoTomador(showNovaSolicitacao);
+    view().querySelector('#ns-novo-tom').onclick = () => tomadorForm(null, showNovaSolicitacao);
     return;
   }
 
@@ -339,7 +352,7 @@ async function showNovaSolicitacao(){
     </div>`;
   maskMoneyInput(view().querySelector('#ns-valor'));
   view().querySelector('#ns-back').onclick = showDashboard;
-  view().querySelector('#ns-add-tom').onclick = () => showNovoTomador(showNovaSolicitacao);
+  view().querySelector('#ns-add-tom').onclick = () => tomadorForm(null, showNovaSolicitacao);
   // Atualiza o aviso de "obrigatório" conforme o tomador escolhido.
   const sel = view().querySelector('#ns-tomador');
   sel.onchange = () => {
@@ -443,7 +456,10 @@ async function showSolicitacao(id){
           <span style="color:var(--taupe);width:17px;flex:none">${ICON.info}</span>
           <span style="font-size:13px;color:var(--taupe);line-height:1.5">Assim que a Maradel emitir, o link da nota e os botões para baixar o PDF e o XML aparecem aqui.</span>
         </div>
-        ${s.status==='solicitada'?`<button class="link-danger" id="sd-cancel" style="display:block;margin:14px auto 0">Cancelar solicitação</button>`:''}`}
+        ${(s.status==='cancelada' && s.motivo_cancelamento)?`<div class="aviso-ressalva" style="margin-top:16px">${ICON.info}<span>Cancelada pelo cliente. Motivo: <strong>${esc(s.motivo_cancelamento)}</strong></span></div>`:''}
+        ${s.status==='solicitada'?`
+        <button class="btn btn-outline btn-block" id="sd-editar" style="margin-top:18px">${ICON.edit}<span>Editar solicitação</span></button>
+        <button class="link-danger" id="sd-cancel" style="display:block;margin:14px auto 0">Cancelar solicitação</button>`:''}`}
     </div>`;
   view().querySelector('#sd-back').onclick = showDashboard;
   // Resolver ressalva: grava o número de pedido e recarrega (item 4).
@@ -490,8 +506,96 @@ async function showSolicitacao(id){
     clienteGrupo: CTX.cliente.whatsapp_grupo || '',
     onEnviado: (canal, destinatario) => api.registrarEnvio({ nota_id: nota.id, canal, destinatario }).catch(()=>{}),
   });
+  // Editar a solicitação (enquanto não atendida) — abre o formulário prefilled.
+  const ed = view().querySelector('#sd-editar');
+  if(ed) ed.onclick = () => showEditarSolicitacao(s);
+  // Cancelar: agora pede confirmação e motivo (ação irreversível).
   const c = view().querySelector('#sd-cancel');
-  if(c) c.onclick = async () => { await api.setStatus(id,'cancelada'); toast('Solicitação cancelada'); showDashboard(); };
+  if(c) c.onclick = () => confirmarCancelamento(id, () => showDashboard());
+}
+
+// Modal de confirmação de cancelamento com motivo (texto livre). O cancelamento
+// é irreversível, por isso exige confirmação explícita.
+function confirmarCancelamento(id, onDone){
+  const m = openModal(`
+    <div class="modal-head"><h3>Cancelar solicitação</h3>
+      <button class="modal-x" id="cc-x">${ICON.x}</button></div>
+    <p class="modal-sub">Esta ação <strong>não poderá ser desfeita</strong>. Conte rapidamente o motivo do cancelamento.</p>
+    <div class="field" style="margin-top:14px"><label>Motivo do cancelamento</label>
+      <textarea class="textarea" id="cc-motivo" placeholder="Ex.: valor incorreto, serviço não realizado…"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary btn-block" id="cc-ok" style="background:var(--st-canc-fg);box-shadow:none">Confirmar cancelamento</button>
+      <button class="btn btn-outline btn-block" id="cc-no">Voltar</button>
+    </div>`);
+  m.querySelector('#cc-x').onclick = closeModal;
+  m.querySelector('#cc-no').onclick = closeModal;
+  m.querySelector('#cc-ok').onclick = async () => {
+    const motivo = m.querySelector('#cc-motivo').value.trim();
+    if(!motivo) return toast('Informe o motivo do cancelamento');
+    const btn = m.querySelector('#cc-ok'); btn.disabled=true; btn.textContent='Cancelando…';
+    try{
+      await api.cancelarSolicitacao(id, motivo);
+      closeModal(); toast('Solicitação cancelada'); onDone?.();
+    }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.textContent='Confirmar cancelamento'; }
+  };
+}
+
+// ---- EDITAR SOLICITAÇÃO (enquanto não atendida) ----------------------------
+async function showEditarSolicitacao(s){
+  setHeader('Editar solicitação');
+  const tomadores = await api.listTomadores(CTX.cliente.id);
+  const exigeDe = id => tomadores.find(t=>t.id===id)?.exige_numero_pedido;
+  view().innerHTML = `
+    <div class="subhead"><button class="back" id="es-back">${ICON.back}</button><h2>Editar solicitação</h2></div>
+    <div class="cli-body">
+      <div class="field"><label>Tomador</label>
+        <select class="select" id="es-tomador">
+          ${tomadores.map(t=>`<option value="${t.id}" data-exige="${t.exige_numero_pedido?1:0}" ${t.id===s.tomador_id?'selected':''}>${esc(t.nome)}${t.doc?' — '+esc(t.doc):''}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Descrição do serviço</label><textarea class="textarea" id="es-desc">${esc(s.descricao)}</textarea></div>
+      <div class="form-grid">
+        <div class="field"><label>Valor</label><input class="input input-lg" id="es-valor" inputmode="numeric" value="${brl(s.valor)}"></div>
+        <div class="field"><label>Competência</label><input class="input" id="es-comp" type="month" value="${esc(s.competencia)}"></div>
+      </div>
+      <div class="field">
+        <label id="es-ped-label">Número de pedido${exigeDe(s.tomador_id)?' <span class="req">obrigatório</span>':' <span class="opt">opcional</span>'}</label>
+        <input class="input" id="es-pedido" value="${esc(s.numero_pedido||'')}" placeholder="Ex.: PO-2026-0042">
+      </div>
+      <div class="field">
+        <label>Recorrência</label>
+        <div class="recor-row">${toggle('es-recor', 'Esta é uma nota recorrente', !!s.recorrente)}</div>
+        <div id="es-recor-meses" class="${s.recorrente?'':'hidden'}" style="margin-top:10px">
+          <label style="font-size:11px">Por quantos meses?</label>
+          <input class="input" id="es-meses" type="number" min="1" max="60" value="${esc(s.recorrencia_meses||'')}" placeholder="Ex.: 12" style="max-width:160px">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" id="es-save" style="margin-top:6px">Salvar alterações</button>
+    </div>`;
+  maskMoneyInput(view().querySelector('#es-valor'));
+  view().querySelector('#es-back').onclick = () => showSolicitacao(s.id);
+  const sel = view().querySelector('#es-tomador');
+  sel.onchange = () => {
+    const exige = sel.selectedOptions[0]?.dataset.exige === '1';
+    view().querySelector('#es-ped-label').innerHTML = `Número de pedido${exige?' <span class="req">obrigatório</span>':' <span class="opt">opcional</span>'}`;
+  };
+  bindToggle(view(), 'es-recor', on => view().querySelector('#es-recor-meses').classList.toggle('hidden', !on));
+  view().querySelector('#es-save').onclick = async () => {
+    const tomador_id = sel.value;
+    const descricao  = view().querySelector('#es-desc').value.trim();
+    const valor      = parseBRL(view().querySelector('#es-valor').value);
+    const competencia= view().querySelector('#es-comp').value;
+    const numero_pedido = view().querySelector('#es-pedido').value.trim() || null;
+    const recorrente = isToggleOn(view(), 'es-recor');
+    const recorrencia_meses = recorrente ? (Number(view().querySelector('#es-meses').value) || null) : null;
+    if(!descricao) return toast('Informe a descrição do serviço');
+    if(!valor)     return toast('Informe o valor');
+    const btn = view().querySelector('#es-save'); btn.disabled=true; btn.textContent='Salvando…';
+    try{
+      await api.atualizarSolicitacao(s.id, { tomador_id, descricao, valor, competencia, numero_pedido, recorrente, recorrencia_meses });
+      toast('Solicitação atualizada'); showSolicitacao(s.id);
+    }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.textContent='Salvar alterações'; }
+  };
 }
 
 // ---- TOMADORES --------------------------------------------------------------
@@ -499,68 +603,95 @@ async function showTomadores(){
   setActiveTab('tomadores');
   view().innerHTML = `<div class="cli-body"><div class="spinner" style="margin:60px auto"></div></div>`;
   const tomadores = await api.listTomadores(CTX.cliente.id);
+  // Renderiza a lista (reusada na busca). Cada linha abre o cadastro completo.
+  const renderLista = lista => lista.length ? `<div class="solic-list">${lista.map(t=>`
+        <div class="tom-row" data-tom="${t.id}">
+          <div class="ava">${initials(t.nome)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="nome">${esc(t.nome)}</div>
+            <div class="meta">${esc(t.doc)}${t.cidade?' · '+esc(t.cidade):''}${t.uf?', '+esc(t.uf):''}${t.exige_numero_pedido?' · <span style="color:var(--terracota-dark)">exige nº pedido</span>':''}</div>
+          </div>
+          <span class="tom-go">${ICON.chevR}</span>
+        </div>`).join('')}</div>`
+    : `<div class="empty-mini">Nenhum tomador encontrado.</div>`;
   view().innerHTML = `
     <div class="subhead" style="position:static">
       <h2 style="margin-left:4px">Meus tomadores</h2>
       <button class="btn-subtle" id="tm-novo" title="Cadastrar novo tomador">${ICON.plus}<span>Novo tomador</span></button>
     </div>
     <div class="cli-body">
-      ${tomadores.length ? `<div class="solic-list">${tomadores.map(t=>`
-        <div class="tom-row">
-          <div class="ava ${t===tomadores[0]?'last':''}">${initials(t.nome)}</div>
-          <div style="flex:1;min-width:0">
-            <div class="nome">${esc(t.nome)}</div>
-            <div class="meta">${esc(t.doc)}${t.cidade?' · '+esc(t.cidade):''}${t.uf?', '+esc(t.uf):''}${t.exige_numero_pedido?' · <span style="color:var(--terracota-dark)">exige nº pedido</span>':''}</div>
-          </div>
-        </div>`).join('')}</div>`
-        : emptyState('users','Nenhum tomador ainda','Cadastre quem recebe suas notas. Depois é só selecionar na nova solicitação.')}
+      ${tomadores.length?`<div class="filter-box">${ICON.search}<input id="tm-busca" placeholder="Buscar por nome, CNPJ/CPF ou cidade…"></div>`:''}
+      <div id="tm-list">${tomadores.length?renderLista(tomadores)
+        :emptyState('users','Nenhum tomador ainda','Cadastre quem recebe suas notas. Depois é só selecionar na nova solicitação.')}</div>
     </div>`;
-  view().querySelector('#tm-novo').onclick = () => showNovoTomador();
+  view().querySelector('#tm-novo').onclick = () => tomadorForm(null);
+  // Clique numa linha → abre o cadastro completo do tomador (ver/editar).
+  const bindRows = () => view().querySelectorAll('[data-tom]').forEach(r =>
+    r.onclick = () => { const t = tomadores.find(x=>x.id===r.dataset.tom); if(t) tomadorForm(t); });
+  bindRows();
+  // Busca/filtro local por nome, documento ou cidade.
+  const busca = view().querySelector('#tm-busca');
+  if(busca) busca.oninput = () => {
+    const b = busca.value.trim().toLowerCase();
+    const filtrada = tomadores.filter(t =>
+      (t.nome||'').toLowerCase().includes(b) ||
+      (t.doc||'').toLowerCase().includes(b) ||
+      (t.cidade||'').toLowerCase().includes(b));
+    view().querySelector('#tm-list').innerHTML = renderLista(filtrada);
+    bindRows();
+  };
 }
 
-// onSalvo: callback opcional chamado após salvar (ex.: voltar para a nova
-// solicitação quando o tomador foi cadastrado pelo atalho). Default: lista.
-function showNovoTomador(onSalvo){
-  setHeader('Novo tomador');
+// Formulário de tomador — cria (tomador=null) ou edita (tomador existente).
+// O botão "Salvar" fica logo abaixo dos campos (sem barra fixa), para não exigir
+// rolagem. onSalvo: callback após salvar (ex.: voltar à nova solicitação).
+function tomadorForm(tomador, onSalvo){
+  const editando = !!tomador;
+  const t = tomador || {};
+  setHeader(editando ? 'Editar tomador' : 'Novo tomador');
   const voltar = onSalvo || showTomadores;
+  const sel = (v, opt) => v===opt ? 'selected' : '';
   view().innerHTML = `
-    <div class="subhead"><button class="back" id="nt-back">${ICON.back}</button><h2>Novo tomador</h2></div>
-    <div class="cli-body" style="padding-bottom:120px">
+    <div class="subhead"><button class="back" id="nt-back">${ICON.back}</button><h2>${editando?'Editar tomador':'Novo tomador'}</h2></div>
+    <div class="cli-body">
       <div class="field"><label>Tipo</label>
-        <select class="select" id="nt-tipo"><option value="PJ">Pessoa Jurídica (CNPJ)</option><option value="PF">Pessoa Física (CPF)</option></select>
+        <select class="select" id="nt-tipo">
+          <option value="PJ" ${sel(t.tipo,'PJ')}>Pessoa Jurídica (CNPJ)</option>
+          <option value="PF" ${sel(t.tipo,'PF')}>Pessoa Física (CPF)</option>
+        </select>
       </div>
-      <div class="field"><label>CNPJ / CPF</label><input class="input" id="nt-doc" inputmode="numeric" placeholder="00.000.000/0000-00"></div>
-      <div class="field"><label>Razão social / Nome</label><input class="input" id="nt-nome" placeholder="Nome do tomador"></div>
-      <div class="field"><label>E-mail <span style="text-transform:none;letter-spacing:0;color:var(--mist)">(opcional)</span></label><input class="input" id="nt-email" type="email" placeholder="contato@tomador.com.br"></div>
-      <div class="field"><label>Endereço</label><input class="input" id="nt-end" placeholder="Rua, número, bairro"></div>
+      <div class="field"><label>CNPJ / CPF</label><input class="input" id="nt-doc" inputmode="numeric" value="${esc(t.doc||'')}" placeholder="00.000.000/0000-00"></div>
+      <div class="field"><label>Razão social / Nome</label><input class="input" id="nt-nome" value="${esc(t.nome||'')}" placeholder="Nome do tomador"></div>
+      <div class="field"><label>E-mail <span style="text-transform:none;letter-spacing:0;color:var(--mist)">(opcional)</span></label><input class="input" id="nt-email" type="email" value="${esc(t.email||'')}" placeholder="contato@tomador.com.br"></div>
+      <div class="field"><label>Endereço</label><input class="input" id="nt-end" value="${esc(t.endereco||'')}" placeholder="Rua, número, bairro"></div>
       <div class="form-grid form-grid-3">
-        <div class="field"><label>Cidade</label><input class="input" id="nt-cid" placeholder="Cidade"></div>
-        <div class="field"><label>UF</label><input class="input" id="nt-uf" maxlength="2" placeholder="SP"></div>
-        <div class="field"><label>CEP</label><input class="input" id="nt-cep" placeholder="00000-000"></div>
+        <div class="field"><label>Cidade</label><input class="input" id="nt-cid" value="${esc(t.cidade||'')}" placeholder="Cidade"></div>
+        <div class="field"><label>UF</label><input class="input" id="nt-uf" maxlength="2" value="${esc(t.uf||'')}" placeholder="SP"></div>
+        <div class="field"><label>CEP</label><input class="input" id="nt-cep" value="${esc(t.cep||'')}" placeholder="00000-000"></div>
       </div>
       <div class="field">
         <label>Número de pedido obrigatório?</label>
-        ${toggle('nt-exige', 'Exigir número de pedido nas notas deste tomador', false)}
+        ${toggle('nt-exige', 'Exigir número de pedido nas notas deste tomador', !!t.exige_numero_pedido)}
         <div style="font-size:12px;color:var(--mist);margin-top:8px">Se ligado, a solicitação sem número de pedido segue com ressalva e a Maradel só emite após o preenchimento.</div>
       </div>
-    </div>
-    <div class="cli-footbar">
-      <button class="btn btn-primary btn-block" id="nt-save">Salvar tomador</button>
+      <button class="btn btn-primary btn-block" id="nt-save" style="margin-top:6px">${editando?'Salvar alterações':'Salvar tomador'}</button>
     </div>`;
   maskDocInput(view().querySelector('#nt-doc'));
   bindToggle(view(), 'nt-exige');
-  view().querySelector('#nt-back').onclick = showTomadores;
+  view().querySelector('#nt-back').onclick = voltar;
   view().querySelector('#nt-save').onclick = async () => {
     const g = id => view().querySelector(id).value.trim();
     const nome = g('#nt-nome'), doc = g('#nt-doc');
     if(!nome || !doc) return toast('Preencha nome e documento');
     const btn = view().querySelector('#nt-save'); btn.disabled=true; btn.textContent='Salvando…';
+    const campos = { tipo:g('#nt-tipo'), doc, nome, email:g('#nt-email')||null,
+      endereco:g('#nt-end'), cidade:g('#nt-cid'), uf:g('#nt-uf'), cep:g('#nt-cep'),
+      exige_numero_pedido: isToggleOn(view(), 'nt-exige') };
     try{
-      await api.criarTomador({ cliente_id:CTX.cliente.id, tipo:g('#nt-tipo'), doc, nome,
-        email:g('#nt-email')||null, endereco:g('#nt-end'), cidade:g('#nt-cid'), uf:g('#nt-uf'), cep:g('#nt-cep'),
-        exige_numero_pedido: isToggleOn(view(), 'nt-exige') });
-      toast('Tomador cadastrado'); voltar();
-    }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.textContent='Salvar tomador'; }
+      if(editando) await api.atualizarTomador(t.id, campos);
+      else         await api.criarTomador({ cliente_id:CTX.cliente.id, ...campos });
+      toast(editando?'Tomador atualizado':'Tomador cadastrado'); voltar();
+    }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.textContent=editando?'Salvar alterações':'Salvar tomador'; }
   };
 }
 
@@ -578,34 +709,27 @@ function renderSemCadastro(){
   document.getElementById('sc-sair').onclick = async () => { await api.signOut(); location.reload(); };
 }
 
-// ---- MINHA CONTA (trocar e-mail e senha) -----------------------------------
+// ---- MINHA CONTA -----------------------------------------------------------
+// Um único formulário com TODOS os dados (nome, e-mail de acesso, telefone e
+// grupo de WhatsApp) e UM botão "Salvar alterações". A senha fica num cartão
+// separado (fluxo próprio). Todos os campos são obrigatórios.
 function showMinhaConta(){
   setActiveTab('conta');
   view().innerHTML = `
     <div class="subhead" style="position:static"><h2 style="margin-left:4px">Minha conta</h2></div>
     <div class="cli-body" style="padding-bottom:40px">
-      <div class="card" style="padding:18px 18px 4px;margin-bottom:18px">
-        <div class="cli-hello" style="margin-bottom:2px">Seus dados</div>
-        <div style="font-size:12.5px;color:var(--mist);margin-bottom:14px">Seu nome aparece na saudação do app e como remetente nas notas enviadas.</div>
+      <div class="card" style="padding:18px 18px 6px;margin-bottom:18px">
+        <div class="cli-hello" style="margin-bottom:2px">Empresa</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:16px">${esc(CTX.cliente.razao_social)}</div>
         <div class="field"><label>Seu nome</label>
           <input class="input" id="mc-nome" value="${esc(CTX.profile.nome||'')}" placeholder="Ex.: João Silva"></div>
-        <button class="btn btn-outline btn-block" id="mc-nome-save" style="margin-bottom:18px">Salvar nome</button>
-      </div>
-      <div class="card" style="padding:18px 18px 4px;margin-bottom:18px">
-        <div class="cli-hello" style="margin-bottom:2px">Empresa</div>
-        <div style="font-size:16px;font-weight:600;margin-bottom:14px">${esc(CTX.cliente.razao_social)}</div>
         <div class="field"><label>E-mail de acesso</label>
-          <input class="input" id="mc-email" type="email" value="${esc(CTX.profile.email||'')}"></div>
-        <button class="btn btn-outline btn-block" id="mc-email-save" style="margin-bottom:18px">Atualizar e-mail</button>
-      </div>
-      <div class="card" style="padding:18px 18px 4px;margin-bottom:18px">
-        <div class="cli-hello" style="margin-bottom:2px">Contato para envio de notas</div>
-        <div style="font-size:12.5px;color:var(--mist);margin-bottom:14px">Usados nos botões "Enviar por WhatsApp" das notas. Opcionais.</div>
+          <input class="input" id="mc-email" type="email" value="${esc(CTX.profile.email||'')}" placeholder="voce@empresa.com.br"></div>
         <div class="field"><label>Telefone (WhatsApp)</label>
           <input class="input" id="mc-tel" inputmode="tel" value="${esc(CTX.cliente.telefone||'')}" placeholder="(11) 99999-8888"></div>
         <div class="field"><label>Link do grupo do WhatsApp</label>
           <input class="input" id="mc-grupo" value="${esc(CTX.cliente.whatsapp_grupo||'')}" placeholder="https://chat.whatsapp.com/..."></div>
-        <button class="btn btn-outline btn-block" id="mc-contato-save" style="margin-bottom:18px">Salvar contato</button>
+        <button class="btn btn-primary btn-block" id="mc-save" style="margin-bottom:18px">Salvar alterações</button>
       </div>
       <div class="card" style="padding:18px 18px 4px">
         <div class="cli-hello" style="margin-bottom:14px">Trocar senha</div>
@@ -618,45 +742,34 @@ function showMinhaConta(){
       <button class="link-danger" id="mc-sair" style="display:block;margin:22px auto 0">Sair da conta</button>
     </div>`;
 
-  // Salvar o nome do contato (profile.nome) — personaliza a saudação e o app.
-  view().querySelector('#mc-nome-save').onclick = async () => {
-    const nome = view().querySelector('#mc-nome').value.trim();
-    const btn = view().querySelector('#mc-nome-save'); btn.disabled=true; btn.textContent='Salvando…';
+  // Salvar tudo de uma vez (nome, e-mail, telefone e grupo). Todos obrigatórios.
+  view().querySelector('#mc-save').onclick = async () => {
+    const g = id => view().querySelector(id).value.trim();
+    const nome = g('#mc-nome'), email = g('#mc-email'), telefone = g('#mc-tel'), grupo = g('#mc-grupo');
+    if(!nome)     return toast('Informe seu nome');
+    if(!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return toast('Informe um e-mail válido');
+    if(!telefone) return toast('Informe o telefone (WhatsApp)');
+    if(!grupo)    return toast('Informe o link do grupo do WhatsApp');
+    const btn = view().querySelector('#mc-save'); btn.disabled=true; btn.textContent='Salvando…';
     try{
-      await api.atualizarMeuNome(nome || null);
-      CTX.profile.nome = nome || null;
-      // Atualiza as iniciais/nome exibidos no cabeçalho e na sidebar na hora.
-      const novasIniciais = initials(nome || CTX.cliente.razao_social);
-      CTX.root.querySelector('#cli-conta').textContent = novasIniciais;
-      CTX.root.querySelectorAll('.cli-profile .nm, .cli-side-user .nm').forEach(n =>
-        n.textContent = nome || CTX.cliente.razao_social);
-      const avaSide = CTX.root.querySelector('.cli-side-user .ava'); if(avaSide) avaSide.textContent = novasIniciais;
-      toast('Nome atualizado');
+      // Nome (profile) + contato (cliente) sempre; e-mail só se mudou (dispara confirmação).
+      await api.atualizarMeuNome(nome);
+      await api.atualizarMeuCliente(CTX.cliente.id, { telefone, whatsapp_grupo: grupo });
+      CTX.profile.nome = nome;
+      CTX.cliente.telefone = telefone; CTX.cliente.whatsapp_grupo = grupo;
+      let avisoEmail = '';
+      if(email !== (CTX.profile.email||'')){
+        await api.atualizarEmail(email);
+        avisoEmail = ' Confirme a troca de e-mail no novo endereço.';
+      }
+      // Reflete nome/iniciais no cabeçalho e na sidebar na hora.
+      const ini = initials(nome || CTX.cliente.razao_social);
+      CTX.root.querySelector('#cli-conta').textContent = ini;
+      CTX.root.querySelectorAll('.cli-profile .nm, .cli-side-user .nm').forEach(n => n.textContent = nome);
+      const avaSide = CTX.root.querySelector('.cli-side-user .ava'); if(avaSide) avaSide.textContent = ini;
+      toast('Dados atualizados.'+avisoEmail);
     }catch(err){ toast('Erro: '+err.message); }
-    btn.disabled=false; btn.textContent='Salvar nome';
-  };
-
-  // Atualizar e-mail (Supabase envia confirmação ao novo endereço).
-  view().querySelector('#mc-email-save').onclick = async () => {
-    const e = view().querySelector('#mc-email').value.trim();
-    if(!/^[^@]+@[^@]+\.[^@]+$/.test(e)) return toast('Informe um e-mail válido');
-    const btn = view().querySelector('#mc-email-save'); btn.disabled=true; btn.textContent='Salvando…';
-    try{ await api.atualizarEmail(e); toast('Confirme a troca no novo e-mail'); }
-    catch(err){ toast('Erro: '+err.message); }
-    btn.disabled=false; btn.textContent='Atualizar e-mail';
-  };
-
-  // Salvar telefone (WhatsApp) e link de grupo no registro do cliente.
-  view().querySelector('#mc-contato-save').onclick = async () => {
-    const telefone = view().querySelector('#mc-tel').value.trim() || null;
-    const whatsapp_grupo = view().querySelector('#mc-grupo').value.trim() || null;
-    const btn = view().querySelector('#mc-contato-save'); btn.disabled=true; btn.textContent='Salvando…';
-    try{
-      await api.atualizarMeuCliente(CTX.cliente.id, { telefone, whatsapp_grupo });
-      CTX.cliente.telefone = telefone; CTX.cliente.whatsapp_grupo = whatsapp_grupo;
-      toast('Contato atualizado');
-    }catch(err){ toast('Erro: '+err.message); }
-    btn.disabled=false; btn.textContent='Salvar contato';
+    btn.disabled=false; btn.textContent='Salvar alterações';
   };
 
   // Atualizar senha.

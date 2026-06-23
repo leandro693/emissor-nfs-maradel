@@ -185,6 +185,34 @@ export async function setStatus(id, status){
   if(error) throw error;
 }
 
+// Atualiza campos editáveis de uma solicitação ainda não emitida. A RLS
+// garante que o cliente só altera as próprias. Sem mudança de schema.
+export async function atualizarSolicitacao(id, campos){
+  const { error } = await supabase.from('solicitacoes').update(campos).eq('id', id);
+  if(error) throw error;
+}
+
+// Cancela uma solicitação registrando o motivo (texto livre). O motivo é
+// gravado em solicitacoes.motivo_cancelamento (migração 0004). Caso a coluna
+// ainda não exista no projeto, o cancelamento ocorre mesmo assim — o motivo é
+// apenas ignorado (degrada com elegância).
+export async function cancelarSolicitacao(id, motivo){
+  const campos = { status: 'cancelada' };
+  if(motivo) campos.motivo_cancelamento = motivo;
+  let { error } = await supabase.from('solicitacoes').update(campos).eq('id', id);
+  if(error && motivo && /motivo_cancelamento/.test(error.message||'')){
+    // Coluna ainda não migrada: cancela sem o motivo.
+    ({ error } = await supabase.from('solicitacoes').update({ status:'cancelada' }).eq('id', id));
+  }
+  if(error) throw error;
+}
+
+// Atualiza um tomador (cliente dono via RLS).
+export async function atualizarTomador(id, campos){
+  const { error } = await supabase.from('tomadores').update(campos).eq('id', id);
+  if(error) throw error;
+}
+
 // Grava o número de pedido na solicitação (analista preenche para liberar a
 // emissão quando o tomador exige número de pedido — item B).
 export async function setNumeroPedido(id, numero_pedido){
