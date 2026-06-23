@@ -1,0 +1,14 @@
+# Segredos — NUNCA versionar (service_role, senha do banco, etc.)
+SUPABASE.txt
+
+# Estado local da Supabase CLI (project-ref, versões, pooler url)
+supabase/.temp/
+
+# Lixo do Windows / Google Drive
+desktop.ini
+**/desktop.ini
+Thumbs.db
+.DS_Store
+
+# Dependências (caso venham a existir)
+node_modules/
