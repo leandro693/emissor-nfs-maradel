@@ -162,6 +162,17 @@ export function badge(status){
   return `<span class="badge ${status}"><span class="dot"></span>${STATUS_LABEL[status]||status}</span>`;
 }
 
+// Selo ÚNICO de status (nunca empilhado). Quando há ressalva, mostra uma única
+// tag "<Status> · com ressalva" com cor própria (âmbar/terracota). Cores fixas
+// por status (cinza/âmbar/azul/verde/vermelho) definidas no CSS, iguais em todo
+// o app. Use sempre esta função para exibir status nas listas e detalhes.
+export function statusTag(status, ressalva){
+  if(ressalva){
+    return `<span class="badge st-ressalva"><span class="dot"></span>${STATUS_LABEL[status]||status} · com ressalva</span>`;
+  }
+  return badge(status);
+}
+
 // Selo "com ressalva" — solicitação registrada sem número de pedido obrigatório
 // (item B). Apenas visual; o bloqueio real da emissão é feito no banco.
 export function ressalvaPill(){

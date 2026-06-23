@@ -7,7 +7,7 @@ import {
   ICON, brl, parseBRL, maskMoneyInput, maskDocInput, currentCompetencia,
   fmtCompetencia, fmtCompetenciaShort, relTime, fmtDate, initials, badge,
   esc, toast, copyToClipboard, openEnvioEmail, openEnvioWhatsApp,
-  ressalvaPill, notaPublicUrl, linkPublicoCard, bindLinkPublico,
+  ressalvaPill, statusTag, notaPublicUrl, linkPublicoCard, bindLinkPublico,
   toggle, bindToggle, isToggleOn, fmtDateTime, openModal, closeModal
 } from './ui.js';
 
@@ -17,7 +17,7 @@ let CTX = { profile:null, cliente:null, root:null, tab:'dashboard' };
 // definem o próprio título via setHeader().
 const TAB_TITLE = {
   dashboard:'Início', solicitacoes:'Minhas solicitações',
-  tomadores:'Meus tomadores', conta:'Minha conta'
+  tomadores:'Cadastro de Tomadores', conta:'Minha conta'
 };
 
 // Ponto de entrada: monta o shell do cliente. Faz onboarding se necessário.
@@ -50,7 +50,7 @@ function renderShell(){
           <button class="s-item s-nova" data-tab="nova" title="Nova solicitação">${ICON.plus}<span>Nova solicitação</span></button>
           <button class="s-item" data-tab="dashboard" title="Início">${ICON.home}<span>Início</span></button>
           <button class="s-item" data-tab="solicitacoes" title="Solicitações">${ICON.list}<span>Solicitações</span><span class="s-badges" id="sb-side" hidden></span></button>
-          <button class="s-item" data-tab="tomadores" title="Tomadores">${ICON.users}<span>Tomadores</span></button>
+          <button class="s-item" data-tab="tomadores" title="Cadastro de Tomadores">${ICON.users}<span>Cadastro de Tomadores</span></button>
           <button class="s-item" data-tab="conta" title="Conta">${ICON.user}<span>Conta</span></button>
         </nav>
         <div class="cli-side-user">
@@ -75,7 +75,7 @@ function renderShell(){
           <button class="item" data-tab="dashboard">${ICON.home}<span>Início</span></button>
           <button class="item" data-tab="solicitacoes"><span class="nav-ic">${ICON.list}<span class="nb-bubble" id="sb-nav" hidden></span></span><span>Solicitações</span></button>
           <button class="item item-nova" data-tab="nova"><span class="navplus">${ICON.plus}</span><span>Nova</span></button>
-          <button class="item" data-tab="tomadores">${ICON.users}<span>Tomadores</span></button>
+          <button class="item" data-tab="tomadores">${ICON.users}<span>Cadastros</span></button>
           <button class="item" data-tab="conta">${ICON.user}<span>Conta</span></button>
         </nav>
       </div>
@@ -118,25 +118,23 @@ function setHeader(title){
   const h = CTX.root.querySelector('#cli-title');
   if(h) h.textContent = title;
 }
-// Atualiza os contadores do módulo "Solicitações" nos menus (sidebar e barra).
-// aAtender (laranja): enviadas e aguardando o analista. comRessalva (vermelho):
-// faltando informação obrigatória — pendência do próprio cliente.
+// Atualiza o contador do módulo "Solicitações" nos menus (item 6): UM ÚNICO
+// número = total de solicitações que precisam de atenção (em aberto). Fica
+// vermelho quando há ressalva (pendência do cliente), senão âmbar.
 function updateNavBadges(aAtender, comRessalva){
+  const total = aAtender + comRessalva;
+  const alerta = comRessalva > 0;
   const side = CTX.root.querySelector('#sb-side');
   if(side){
-    const parts = [];
-    if(aAtender>0)    parts.push(`<span class="nb nb-pend">(${aAtender})</span>`);
-    if(comRessalva>0) parts.push(`<span class="nb nb-alert">(${comRessalva})</span>`);
-    side.innerHTML = parts.join('');
-    side.hidden = parts.length===0;
+    side.textContent = total>0 ? `(${total})` : '';
+    side.className = 's-badges ' + (alerta ? 'nb-alert' : 'nb-pend');
+    side.hidden = total===0;
   }
   const nav = CTX.root.querySelector('#sb-nav');
   if(nav){
-    // Na barra (mobile) cabe uma bolha: prioriza a pendência do cliente (vermelha).
-    const n = comRessalva>0 ? comRessalva : aAtender;
-    nav.textContent = n>0 ? String(n) : '';
-    nav.className = 'nb-bubble ' + (comRessalva>0 ? 'alert' : 'pend');
-    nav.hidden = n===0;
+    nav.textContent = total>0 ? String(total) : '';
+    nav.className = 'nb-bubble ' + (alerta ? 'alert' : 'pend');
+    nav.hidden = total===0;
   }
 }
 const view = () => CTX.root.querySelector('#cli-view');
@@ -246,73 +244,110 @@ function temRessalva(s){
 // vaza — para o cliente é apenas "Em emissão" (em andamento na Maradel).
 function statusCliente(st){ return st==='aguardando_conferencia' ? 'em_emissao' : st; }
 
-// Card "Precisa de ajuda?" com o contato de atendimento institucional (item 5).
+// Card "Precisa de ajuda?" — compacto e discreto (item 5): ícone pequeno, nome
+// e links de WhatsApp/e-mail em linha. Nada de ícone grande.
 function ajudaCard(cfg){
   if(!cfg || (!cfg.whatsapp && !cfg.email)) return '';
   const nome = cfg.nome || 'a Maradel';
   const wpp = cfg.whatsapp ? `https://wa.me/${String(cfg.whatsapp).replace(/\D/g,'')}` : '';
   return `
-    <div class="card help-card">
-      <div class="help-h">${ICON.help}<span>Precisa de ajuda? Fale com <strong>${esc(nome)}</strong></span></div>
-      <div class="btn-row" style="margin-top:12px">
-        ${wpp?`<a class="btn btn-ghost" href="${esc(wpp)}" target="_blank" rel="noopener">${ICON.whatsapp}<span>WhatsApp</span></a>`:''}
-        ${cfg.email?`<a class="btn btn-outline" href="mailto:${esc(cfg.email)}">${ICON.mail}<span>E-mail</span></a>`:''}
-      </div>
+    <div class="help-card">
+      <span class="help-ic">${ICON.help}</span>
+      <span class="help-tx">Precisa de ajuda? Fale com <strong>${esc(nome)}</strong></span>
+      <span class="help-links">
+        ${wpp?`<a href="${esc(wpp)}" target="_blank" rel="noopener">${ICON.whatsapp}<span>WhatsApp</span></a>`:''}
+        ${cfg.email?`<a href="mailto:${esc(cfg.email)}">${ICON.mail}<span>E-mail</span></a>`:''}
+      </span>
     </div>`;
 }
 
-// Data de atendimento: quando emitida, a data de emissão da nota; senão "—".
+// Data de atendimento (item 1): SÓ existe quando a nota está emitida; enquanto
+// não, retorna '' (exibida de forma discreta). Nunca pode ser anterior à data
+// da solicitação — se a emissão vier antes (dado inconsistente), usa a data da
+// solicitação como piso. Comparação por data ISO (YYYY-MM-DD), sem fuso.
 function dataAtendimento(s){
   const nota = Array.isArray(s.nota) ? s.nota[0] : s.nota;
-  return (s.status==='emitida' && nota?.data_emissao) ? fmtDate(nota.data_emissao) : '—';
+  if(s.status!=='emitida' || !nota?.data_emissao) return '';
+  const sol = String(s.created_at||'').slice(0,10);
+  const at  = (sol && nota.data_emissao < sol) ? sol : nota.data_emissao;
+  return fmtDate(at);
 }
 // Cabeçalho da tabela de solicitações (visível no desktop; some no mobile).
 const QHEAD = `<div class="qhead"><span>Tomador</span><span>Solicitada</span><span>Atendida</span><span class="r">Valor / Status</span></div>`;
 // Uma linha da tabela de solicitações. Mais novo em cima (a lista já vem
-// ordenada desc.). Mostra data da solicitação e data de atendimento.
+// ordenada desc.). Mostra data da solicitação e, quando emitida, a de atendimento.
+// Status em UMA única tag (item 2), sem empilhar.
 function rowQueue(s){
   const canceled = s.status==='cancelada';
   const serv = (s.descricao||'').slice(0,40);
   const dSol = fmtDate(s.created_at), dAt = dataAtendimento(s);
+  const atendCol = dAt ? dAt : '<span style="color:var(--mist)">—</span>';
   return `
     <div class="qrow" data-solic="${s.id}">
       <div class="q-main">
         <div class="nome">${esc(s.tomador?.nome||'Tomador')}</div>
-        <div class="meta">${esc(serv)}${(s.descricao||'').length>40?'…':''}<span class="q-dates"> · ${dSol} → ${dAt}</span></div>
+        <div class="meta">${esc(serv)}${(s.descricao||'').length>40?'…':''}<span class="q-dates"> · ${dSol}${dAt?' → '+dAt:''}</span></div>
       </div>
       <div class="q-date">${dSol}</div>
-      <div class="q-date">${dAt}</div>
+      <div class="q-date">${atendCol}</div>
       <div class="q-end">
         <div class="q-val" style="${canceled?'color:var(--mist);text-decoration:line-through':''}">${brl(s.valor)}</div>
-        <div class="q-st">${temRessalva(s)?ressalvaPill():''}${badge(statusCliente(s.status))}</div>
+        <div class="q-st">${statusTag(statusCliente(s.status), temRessalva(s))}</div>
       </div>
     </div>`;
 }
+
+// Grupos de filtro rápido (item 7). "Em andamento" = tudo que não foi emitido
+// nem cancelado (inclui o estado interno de conferência, que o cliente vê como
+// em andamento).
+const SOLIC_FILTROS = {
+  todas:      { label:'Todas',        teste: () => true },
+  andamento:  { label:'Em andamento', teste: s => s.status!=='emitida' && s.status!=='cancelada' },
+  atendidas:  { label:'Atendidas',    teste: s => s.status==='emitida' },
+  canceladas: { label:'Canceladas',   teste: s => s.status==='cancelada' },
+};
+let solicFiltro = 'todas';
 
 // ---- SOLICITAÇÕES (lista completa) -----------------------------------------
 async function showSolicitacoes(){
   setActiveTab('solicitacoes');
   view().innerHTML = `<div class="cli-body"><div class="spinner" style="margin:60px auto"></div></div>`;
   const solics = await api.listSolicitacoesCliente(CTX.cliente.id);
-  // Atualiza os contadores do menu e monta o resumo de pendências do topo.
+  // Contador único do menu (item 6): solicitações que precisam de atenção.
   const comRessalva = solics.filter(temRessalva).length;
   const aAtender = solics.filter(s => s.status==='solicitada' && !temRessalva(s)).length;
   updateNavBadges(aAtender, comRessalva);
-  const resumo = [
-    aAtender>0    ? `<span class="nb nb-pend">${aAtender} a atender</span>` : '',
-    comRessalva>0 ? `<span class="nb nb-alert">${comRessalva} com ressalva</span>` : ''
-  ].filter(Boolean).join('');
+
+  // Botões de filtro rápido. Renderiza a lista filtrada (sempre mais novo em cima).
+  const renderLista = () => {
+    const f = SOLIC_FILTROS[solicFiltro] || SOLIC_FILTROS.todas;
+    const lista = solics.filter(f.teste);
+    const box = view().querySelector('#solic-lista');
+    box.innerHTML = lista.length
+      ? `<div class="qlist">${QHEAD}${lista.map(rowQueue).join('')}</div>`
+      : `<div class="empty-mini">Nada em "${f.label}".</div>`;
+    box.querySelectorAll('[data-solic]').forEach(r => r.onclick = () => showSolicitacao(r.dataset.solic));
+  };
+
   view().innerHTML = `
-    <div class="subhead" style="position:static">
-      <h2 style="margin-left:4px">Minhas solicitações</h2>
-      ${resumo?`<div class="solic-resumo">${resumo}</div>`:''}
-    </div>
+    <div class="subhead" style="position:static"><h2 style="margin-left:4px">Minhas solicitações</h2></div>
     <div class="cli-body">
-      ${solics.length ? `<div class="qlist">${QHEAD}${solics.map(rowQueue).join('')}</div>`
+      ${solics.length ? `
+        <div class="chip-row">
+          ${Object.entries(SOLIC_FILTROS).map(([k,v])=>`<button class="chip ${k===solicFiltro?'on':''}" data-filtro="${k}">${v.label}</button>`).join('')}
+        </div>
+        <div id="solic-lista"></div>`
         : emptyState('list','Nenhuma solicitação ainda','Toque em "Nova solicitação" e a Maradel cuida da emissão.')}
     </div>`;
-  view().querySelectorAll('[data-solic]').forEach(r =>
-    r.onclick = () => showSolicitacao(r.dataset.solic));
+
+  if(solics.length){
+    renderLista();
+    view().querySelectorAll('[data-filtro]').forEach(b => b.onclick = () => {
+      solicFiltro = b.dataset.filtro;
+      view().querySelectorAll('[data-filtro]').forEach(x => x.classList.toggle('on', x.dataset.filtro===solicFiltro));
+      renderLista();
+    });
+  }
 }
 
 // ---- NOVA SOLICITAÇÃO -------------------------------------------------------
@@ -446,7 +481,7 @@ async function showSolicitacao(id){
           <div class="fat-label">${emitida?'NFS-e nº':'Solicitação'}</div>
           <div style="font-size:24px;font-weight:700;color:var(--terracota);margin-top:3px">${emitida?esc(nota.numero||'—'):'#'+s.id.slice(0,8)}</div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ressalva?ressalvaPill():''}${badge(statusCliente(s.status))}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${statusTag(statusCliente(s.status), ressalva)}</div>
       </div>
       ${ressalva?`<div class="aviso-ressalva" style="margin-bottom:16px">${ICON.alert}<span>Falta o <strong>número de pedido</strong> exigido por este tomador. A Maradel só emite após o preenchimento.</span></div>`:''}
       ${podeResolverRessalva?`
@@ -464,7 +499,7 @@ async function showSolicitacao(id){
         ${s.numero_pedido?`<div class="kv"><span class="k">Nº de pedido</span><span class="v">${esc(s.numero_pedido)}</span></div>`:''}
         ${s.recorrente?`<div class="kv"><span class="k">Recorrência</span><span class="v">${s.recorrencia_meses?esc(s.recorrencia_meses)+' meses':'Sim'}</span></div>`:''}
         <div class="kv"><span class="k">Competência</span><span class="v">${fmtCompetencia(s.competencia)}</span></div>
-        ${emitida?`<div class="kv"><span class="k">Emissão</span><span class="v">${fmtDate(nota.data_emissao)}</span></div>`:''}
+        ${emitida?`<div class="kv"><span class="k">Emissão</span><span class="v">${dataAtendimento(s)}</span></div>`:''}
         <div class="kv" style="background:#FAF8F6"><span class="k" style="font-weight:600;color:var(--grafite)">Valor</span><span class="v" style="font-size:18px;color:var(--terracota)">${brl(s.valor)}</span></div>
       </div>
       ${emitida ? `
@@ -641,7 +676,7 @@ async function showTomadores(){
     : `<div class="empty-mini">Nenhum tomador encontrado.</div>`;
   view().innerHTML = `
     <div class="subhead" style="position:static">
-      <h2 style="margin-left:4px">Meus tomadores</h2>
+      <h2 style="margin-left:4px">Cadastro de Tomadores</h2>
       <button class="btn-subtle" id="tm-novo" title="Cadastrar novo tomador">${ICON.plus}<span>Novo tomador</span></button>
     </div>
     <div class="cli-body">

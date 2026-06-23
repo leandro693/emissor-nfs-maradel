@@ -6,7 +6,7 @@ import * as api from './api.js';
 import {
   ICON, brl, fmtCompetencia, fmtCompetenciaShort, fmtDate, fmtDateTime, relTime, initials, badge,
   esc, toast, copyToClipboard, maskDocInput, openEnvioEmail, openEnvioWhatsApp,
-  ressalvaPill, notaPublicUrl, linkPublicoCard, bindLinkPublico, STATUS_LABEL,
+  ressalvaPill, statusTag, notaPublicUrl, linkPublicoCard, bindLinkPublico, STATUS_LABEL,
   roleLabel, openModal, closeModal
 } from './ui.js';
 
@@ -148,7 +148,7 @@ function filaRow(s){
       <div class="svc">${esc((s.descricao||'').slice(0,22))}${(s.descricao||'').length>22?'…':''}</div>
       <div class="comp svc">${fmtCompetenciaShort(s.competencia)}</div>
       <div class="val">${brl(s.valor)}</div>
-      <div class="st" style="display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap">${temRessalva(s)?ressalvaPill():''}${badge(s.status)}</div>
+      <div class="st" style="display:flex;justify-content:flex-end">${statusTag(s.status, temRessalva(s))}</div>
     </div>`;
 }
 
@@ -396,7 +396,7 @@ async function showDetalhe(id){
       <div class="det-head">
         <button class="back" id="dt-back">${ICON.back}</button>
         <div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h1>${esc(s.cliente?.razao_social||'Cliente')}</h1>${(exigePedido&&pedidoVazio&&!emitida)?ressalvaPill():''}${badge(s.status)}</div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><h1>${esc(s.cliente?.razao_social||'Cliente')}</h1>${statusTag(s.status, exigePedido&&pedidoVazio&&!emitida)}</div>
           <div class="sub" style="font-size:12.5px;color:var(--mist);margin-top:2px">Recebida ${relTime(s.created_at)} · #${s.id.slice(0,8)}</div>
         </div>
       </div>
