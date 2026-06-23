@@ -94,19 +94,40 @@ button{font-family:inherit}
   font-size:12.5px;color:var(--mist)}
 
 /* ============================================================
-   APP CLIENTE (mobile)
+   APP CLIENTE — layout adaptativo (item 1)
+   Mobile-first: barra inferior + cabeçalho escuro (logo).
+   A sidebar existe na marcação mas só aparece no desktop (media query).
    ============================================================ */
 .cli{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;
   padding-bottom:84px}
-.cli-top{background:var(--grafite-top);padding:18px 22px;display:flex;align-items:center;justify-content:space-between}
-.cli-top img{height:26px}
-.cli-top .avatar{width:34px;height:34px;border-radius:50%;background:var(--terracota);color:#fff;
-  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
+.cli-shell{min-height:100vh}
+.cli-side{display:none} /* mobile: sem sidebar (item 1) */
+
+/* cabeçalho do topo */
+.cli-top{background:var(--grafite-top);padding:18px 22px;display:flex;align-items:center;
+  justify-content:space-between;gap:12px}
+.cli-top-logo{height:26px;display:block}
+.cli-title{display:none} /* no mobile mostramos o logo, não o título */
+.cli-profile{display:flex;align-items:center;gap:10px}
+.cli-profile .info{display:none} /* nome/papel só no desktop */
+.cli-profile .ava{width:34px;height:34px;border-radius:50%;background:var(--terracota);color:#fff;
+  border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
 .cli-body{padding:24px 20px}
 .cli-hello{font-size:13px;color:var(--taupe)}
 .cli-empresa{font-size:22px;font-weight:600;letter-spacing:-.01em;margin-top:2px}
 .section-title{font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--grafite)}
 .muted{color:var(--taupe)}
+
+/* card de alerta no topo do dashboard (item 4) — nota aguardando nº de pedido */
+.alert-card{display:flex;align-items:center;gap:13px;margin:20px 0 0;padding:15px 16px;cursor:pointer;
+  background:#FBF1E7;border:1px solid rgba(219,132,56,.4)}
+.alert-card .ic{width:26px;height:26px;flex:none;color:var(--terracota-dark);display:flex}
+.alert-card .ic svg{width:24px;height:24px;stroke:var(--terracota-dark)}
+.alert-card .tx{flex:1;min-width:0}
+.alert-card .t{font-size:14px;font-weight:700;color:var(--terracota-dark);line-height:1.35}
+.alert-card .s{font-size:12.5px;color:var(--taupe);margin-top:2px}
+.alert-card .go{color:var(--terracota);width:18px;flex:none;display:flex}
+.alert-card:hover{background:#F8E9D9}
 
 /* faturamento */
 .fat-card{padding:22px 20px 18px;margin:20px 0 24px}
@@ -122,14 +143,22 @@ button{font-family:inherit}
 .solic-row .meta{font-size:12.5px;color:var(--taupe);margin-top:2px}
 .solic-row .val{font-size:15px;font-weight:700;text-align:right}
 
-/* bottom nav + fab */
+/* barra de navegação inferior (mobile) — "Nova" virou item central (item 2) */
 .cli-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
   height:64px;background:#fff;border-top:1px solid var(--line);display:flex;align-items:center;
-  justify-content:space-around;padding:0 18px;z-index:20}
+  justify-content:space-around;padding:0 10px;z-index:20}
 .cli-nav .item{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--mist);
-  font-size:10px;font-weight:500;cursor:pointer;background:none;border:none}
+  font-size:9.5px;font-weight:500;cursor:pointer;background:none;border:none;flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:20%}
+.cli-nav .item svg{width:22px;height:22px}
 .cli-nav .item.active{color:var(--terracota);font-weight:600}
-.fab{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:25}
+/* item "Nova": botão "+" elevado em destaque terracota */
+.cli-nav .item-nova{color:var(--terracota-dark);font-weight:600}
+.cli-nav .item-nova .navplus{width:44px;height:44px;border-radius:50%;background:var(--terracota);
+  color:#fff;display:flex;align-items:center;justify-content:center;margin-top:-20px;
+  box-shadow:0 6px 16px rgba(219,132,56,.4)}
+.cli-nav .item-nova .navplus svg{width:24px;height:24px;stroke:#fff}
+.cli-nav .item-nova.active{color:var(--terracota-dark)}
 
 /* page header (subpáginas cliente) */
 .subhead{background:#fff;border-bottom:1px solid var(--line);padding:14px 18px;display:flex;
@@ -371,24 +400,76 @@ button{font-family:inherit}
 .nota-pub-foot{text-align:center;font-size:12px;color:var(--mist);padding:20px}
 
 /* ============================================================
-   RESPONSIVO — APP CLIENTE NO DESKTOP (item A)
-   Aproveita a largura, botões lado a lado, sem esticar campos.
+   RESPONSIVO — APP CLIENTE NO DESKTOP (item 1)
+   Sidebar fixa retrátil à esquerda + cabeçalho com título e perfil.
+   A barra inferior some; o conteúdo ocupa a área à direita.
    ============================================================ */
 @media(min-width:768px){
-  .cli{max-width:760px;padding-bottom:96px;box-shadow:0 0 0 1px var(--line)}
-  .cli-top{padding:20px 32px}
-  .cli-body{padding:30px 32px}
-  /* elementos fixos acompanham a largura do container */
-  .cli-nav,.fab,.cli-footbar{max-width:760px}
-  /* listas em duas colunas para usar a largura */
+  .cli{max-width:none;margin:0;display:flex;min-height:100vh;padding-bottom:0}
+
+  /* ---- SIDEBAR (estilo "app de gestão", identidade Maradel) ---- */
+  .cli-side{display:flex;flex-direction:column;width:236px;flex:none;background:var(--grafite-top);
+    position:sticky;top:0;height:100vh;padding:22px 0;transition:width .18s ease}
+  .cli-side-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 18px 22px}
+  .cli-side-logo{height:26px}
+  .cli-side-toggle{background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;
+    width:26px;height:26px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:7px}
+  .cli-side-toggle:hover{background:rgba(255,255,255,.08);color:#fff}
+  .cli-side-nav{display:flex;flex-direction:column;gap:3px;padding:0 12px}
+  .cli-side .s-item{display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:9px;
+    color:rgba(255,255,255,.6);font-size:14px;font-weight:500;cursor:pointer;background:none;border:none;
+    text-align:left;width:100%;white-space:nowrap;overflow:hidden}
+  .cli-side .s-item svg{width:20px;height:20px;flex:none}
+  .cli-side .s-item:hover{background:rgba(255,255,255,.06);color:#fff}
+  .cli-side .s-item.active{background:rgba(219,132,56,.16);color:#fff;font-weight:600}
+  .cli-side .s-item.active svg{stroke:var(--terracota)}
+  /* "Nova solicitação" como item de menu em destaque (item 2) */
+  .cli-side .s-nova{background:var(--terracota);color:#fff;margin-bottom:10px}
+  .cli-side .s-nova:hover{background:var(--terracota-dark);color:#fff}
+  .cli-side .s-nova svg{stroke:#fff}
+  .cli-side-user{margin-top:auto;display:flex;align-items:center;gap:11px;padding-top:14px;
+    margin:auto 14px 0;border-top:1px solid rgba(255,255,255,.08)}
+  .cli-side-user .ava{width:34px;height:34px;border-radius:50%;background:var(--chumbo);color:#fff;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+  .cli-side-user .info{min-width:0}
+  .cli-side-user .nm{font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cli-side-user .rl{font-size:11px;color:rgba(255,255,255,.45)}
+  .cli-side-user .logout{margin-left:auto;background:none;border:none;color:rgba(255,255,255,.5);
+    cursor:pointer;width:20px;height:20px;flex:none}
+  .cli-side-user .logout:hover{color:#fff}
+
+  /* ---- sidebar retraída: só ícones (item 1) ---- */
+  .cli[data-collapsed="true"] .cli-side{width:72px}
+  .cli[data-collapsed="true"] .cli-side-logo,
+  .cli[data-collapsed="true"] .cli-side .s-item span,
+  .cli[data-collapsed="true"] .cli-side-user .info,
+  .cli[data-collapsed="true"] .cli-side-user .logout{display:none}
+  .cli[data-collapsed="true"] .cli-side-head{justify-content:center;padding:0 0 22px}
+  .cli[data-collapsed="true"] .cli-side .s-item{justify-content:center;padding:11px 0}
+  .cli[data-collapsed="true"] .cli-side-user{justify-content:center;margin:auto 0 0;padding:14px 0 0}
+
+  /* ---- SHELL (cabeçalho claro + conteúdo) ---- */
+  .cli-shell{flex:1;min-width:0;min-height:100vh;display:flex;flex-direction:column}
+  .cli-top{background:#fff;border-bottom:1px solid var(--line);padding:14px 32px;
+    position:sticky;top:0;z-index:15}
+  .cli-top-logo{display:none}          /* logo está na sidebar */
+  .cli-title{display:block;font-size:18px;font-weight:600;color:var(--grafite)}
+  .cli-profile .info{display:block;text-align:right}
+  .cli-profile .nm{font-size:13px;font-weight:600;color:var(--grafite)}
+  .cli-profile .rl{font-size:11px;color:var(--taupe);margin-top:1px}
+  .cli-profile .ava{width:36px;height:36px}
+  .cli-nav{display:none}               /* sem barra inferior no desktop */
+
+  /* conteúdo: largura confortável, listas em duas colunas */
+  #cli-view{flex:1}
+  /* o cabeçalho do shell já é fixo; o subcabeçalho das subtelas entra no fluxo */
+  .cli-shell .subhead{position:static}
+  .cli-body{padding:30px 32px;max-width:920px}
   .solic-list{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  /* o gráfico de faturamento ocupa a linha inteira */
-  .fat-card{grid-column:1 / -1}
-  /* o botão de enviar (barra fixa) fica confortável e centralizado, sem esticar */
-  .cli-footbar .btn-block{max-width:360px;margin-left:auto;margin-right:auto}
-}
-/* telas bem largas: centraliza o conteúdo do cliente sem alongar */
-@media(min-width:1100px){
-  .cli{max-width:860px}
-  .cli-nav,.fab,.cli-footbar{max-width:860px}
+  /* barra de ação dos formulários deixa de ser flutuante e entra no fluxo */
+  .cli-footbar{position:static;transform:none;max-width:none;width:auto;background:#fff;
+    border-top:1px solid var(--line);padding:18px 32px;margin-top:8px}
+  .cli-footbar .btn-block{max-width:360px}
+  /* a barra "Novo tomador" (transparente, fixa acima da nav) volta ao fluxo */
+  .cli-footbar[style*="bottom:64px"]{bottom:auto !important}
 }

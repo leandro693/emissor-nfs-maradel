@@ -13,6 +13,13 @@ import {
 
 let CTX = { profile:null, cliente:null, root:null, tab:'dashboard' };
 
+// Título do cabeçalho (desktop) por aba de topo. Subtelas (nova/detalhe)
+// definem o próprio título via setHeader().
+const TAB_TITLE = {
+  dashboard:'Início', solicitacoes:'Minhas solicitações',
+  tomadores:'Meus tomadores', conta:'Minha conta'
+};
+
 // Ponto de entrada: monta o shell do cliente. Faz onboarding se necessário.
 export async function mountCliente(root, profile){
   CTX = { profile, cliente:null, root, tab:'dashboard' };
@@ -23,42 +30,90 @@ export async function mountCliente(root, profile){
 }
 
 // ---- shell + navegação ------------------------------------------------------
+// Layout adaptativo (item 1): a MESMA marcação traz a sidebar (desktop) e a
+// barra inferior (mobile); o CSS mostra uma ou outra conforme a largura da tela.
+// No desktop, a sidebar retrai/expande (item 1) e há um cabeçalho com o título
+// da tela e o perfil à direita. "Nova solicitação" virou item de menu (item 2).
 function renderShell(){
+  const nome = CTX.profile.nome || CTX.cliente.razao_social;
+  // Preferência de sidebar retraída persiste entre sessões.
+  const collapsed = localStorage.getItem('cli_side_collapsed') === '1';
   CTX.root.innerHTML = `
-    <div class="cli">
-      <div class="cli-top">
-        <img src="assets/logo-horizontal-white.png" alt="Maradel">
-        <div style="display:flex;align-items:center;gap:14px">
-          <div style="position:relative;color:rgba(255,255,255,.8);width:22px;height:22px">${ICON.bell}</div>
-          <button id="cli-logout" title="Sair" style="background:none;border:none;cursor:pointer;width:34px;height:34px;border-radius:50%;background:var(--terracota);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600">${initials(CTX.cliente.razao_social)}</button>
+    <div class="cli" data-collapsed="${collapsed?'true':'false'}">
+      <!-- SIDEBAR — visível no desktop -->
+      <aside class="cli-side">
+        <div class="cli-side-head">
+          <img class="cli-side-logo" src="assets/logo-horizontal-white.png" alt="Maradel">
+          <button class="cli-side-toggle" id="cli-toggle" title="Retrair/expandir menu">${ICON.menu}</button>
         </div>
-      </div>
-      <div id="cli-view"></div>
-      <button class="btn btn-primary fab" id="cli-fab" style="border-radius:999px;padding:14px 24px">${ICON.plus}<span>Nova solicitação</span></button>
-      <div class="cli-nav">
-        <button class="item" data-tab="dashboard">${ICON.home}<span>Início</span></button>
-        <button class="item" data-tab="solicitacoes">${ICON.list}<span>Solicitações</span></button>
-        <button class="item" data-tab="tomadores">${ICON.users}<span>Tomadores</span></button>
-        <button class="item" data-tab="conta">${ICON.user}<span>Conta</span></button>
+        <nav class="cli-side-nav">
+          <button class="s-item s-nova" data-tab="nova" title="Nova solicitação">${ICON.plus}<span>Nova solicitação</span></button>
+          <button class="s-item" data-tab="dashboard" title="Início">${ICON.home}<span>Início</span></button>
+          <button class="s-item" data-tab="solicitacoes" title="Solicitações">${ICON.list}<span>Solicitações</span></button>
+          <button class="s-item" data-tab="tomadores" title="Tomadores">${ICON.users}<span>Tomadores</span></button>
+          <button class="s-item" data-tab="conta" title="Conta">${ICON.user}<span>Conta</span></button>
+        </nav>
+        <div class="cli-side-user">
+          <div class="ava">${initials(nome)}</div>
+          <div class="info"><div class="nm">${esc(nome)}</div><div class="rl">Prestador</div></div>
+          <button id="cli-logout-side" class="logout" title="Sair">${ICON.logout}</button>
+        </div>
+      </aside>
+      <!-- SHELL — cabeçalho + conteúdo + barra inferior (mobile) -->
+      <div class="cli-shell">
+        <header class="cli-top">
+          <img class="cli-top-logo" src="assets/logo-horizontal-white.png" alt="Maradel">
+          <h1 class="cli-title" id="cli-title">Início</h1>
+          <div class="cli-profile">
+            <div class="info"><div class="nm">${esc(nome)}</div><div class="rl">Prestador</div></div>
+            <button id="cli-logout" class="ava" title="Sair">${initials(nome)}</button>
+          </div>
+        </header>
+        <div id="cli-view"></div>
+        <nav class="cli-nav">
+          <button class="item" data-tab="dashboard">${ICON.home}<span>Início</span></button>
+          <button class="item" data-tab="solicitacoes">${ICON.list}<span>Solicitações</span></button>
+          <button class="item item-nova" data-tab="nova"><span class="navplus">${ICON.plus}</span><span>Nova</span></button>
+          <button class="item" data-tab="tomadores">${ICON.users}<span>Tomadores</span></button>
+          <button class="item" data-tab="conta">${ICON.user}<span>Conta</span></button>
+        </nav>
       </div>
     </div>`;
-  CTX.root.querySelector('#cli-logout').onclick = async () => { await api.signOut(); location.reload(); };
-  CTX.root.querySelector('#cli-fab').onclick = () => showNovaSolicitacao();
-  CTX.root.querySelectorAll('.cli-nav .item').forEach(b => b.onclick = () => {
+
+  // Sair (botão no cabeçalho e na sidebar).
+  const sair = async () => { await api.signOut(); location.reload(); };
+  CTX.root.querySelector('#cli-logout').onclick = sair;
+  CTX.root.querySelector('#cli-logout-side').onclick = sair;
+
+  // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
+  CTX.root.querySelector('#cli-toggle').onclick = () => {
+    const cli = CTX.root.querySelector('.cli');
+    const on = cli.dataset.collapsed !== 'true';
+    cli.dataset.collapsed = on ? 'true' : 'false';
+    localStorage.setItem('cli_side_collapsed', on ? '1' : '0');
+  };
+
+  // Navegação: sidebar (desktop) e barra inferior (mobile) compartilham data-tab.
+  CTX.root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {
     const t = b.dataset.tab;
-    if(t==='dashboard') showDashboard();
+    if(t==='nova') showNovaSolicitacao();
+    else if(t==='dashboard') showDashboard();
     else if(t==='solicitacoes') showSolicitacoes();
     else if(t==='tomadores') showTomadores();
     else showMinhaConta();
   });
 }
+// Marca a aba ativa (em ambos os menus) e atualiza o título do cabeçalho.
 function setActiveTab(tab){
   CTX.tab = tab;
-  CTX.root.querySelectorAll('.cli-nav .item').forEach(b =>
+  CTX.root.querySelectorAll('[data-tab]').forEach(b =>
     b.classList.toggle('active', b.dataset.tab===tab));
-  const fab = CTX.root.querySelector('#cli-fab');
-  // FAB aparece nas telas de lista (Início e Solicitações).
-  if(fab) fab.style.display = (tab==='dashboard' || tab==='solicitacoes') ? '' : 'none';
+  setHeader(TAB_TITLE[tab] || '');
+}
+// Atualiza o título exibido no cabeçalho (desktop). Usado por subtelas.
+function setHeader(title){
+  const h = CTX.root.querySelector('#cli-title');
+  if(h) h.textContent = title;
 }
 const view = () => CTX.root.querySelector('#cli-view');
 
@@ -76,10 +131,26 @@ async function showDashboard(){
   const atual = currentCompetencia();
   const fatAtual = porMes[atual] || (meses.length ? porMes[meses[meses.length-1]] : 0);
 
+  // Notas com ressalva (faltando número de pedido obrigatório) — item 4.
+  // Geram um card de alerta em destaque no topo do dashboard.
+  const pendentes = solics.filter(temRessalva);
+
   view().innerHTML = `
     <div class="cli-body">
       <div class="cli-hello">Olá${CTX.profile.nome?', '+esc(CTX.profile.nome.split(' ')[0]):''}</div>
       <div class="cli-empresa">${esc(CTX.cliente.razao_social)}</div>
+
+      ${pendentes.length ? `
+      <div class="card alert-card" id="cli-pend" role="button" tabindex="0">
+        <span class="ic">${ICON.alert}</span>
+        <div class="tx">
+          <div class="t">${pendentes.length===1
+            ? 'Você tem 1 nota aguardando número de pedido'
+            : `Você tem ${pendentes.length} notas aguardando número de pedido`}</div>
+          <div class="s">Toque para informar o número e liberar a emissão.</div>
+        </div>
+        <span class="go">${ICON.chevR}</span>
+      </div>` : ''}
 
       <div class="card fat-card">
         <div class="fat-label">Faturamento · ${fmtCompetencia(atual)}</div>
@@ -97,6 +168,11 @@ async function showDashboard(){
 
   view().querySelectorAll('[data-solic]').forEach(r =>
     r.onclick = () => showSolicitacao(r.dataset.solic));
+
+  // Card de ressalva (item 4): com 1 nota abre direto; com várias, vai à lista.
+  const pend = view().querySelector('#cli-pend');
+  if(pend) pend.onclick = () =>
+    pendentes.length===1 ? showSolicitacao(pendentes[0].id) : showSolicitacoes();
 }
 
 // Desenha o gráfico de evolução (SVG area) a partir dos meses informados.
@@ -165,6 +241,7 @@ async function showSolicitacoes(){
 
 // ---- NOVA SOLICITAÇÃO -------------------------------------------------------
 async function showNovaSolicitacao(){
+  setActiveTab('nova'); setHeader('Nova solicitação');
   const tomadores = await api.listTomadores(CTX.cliente.id);
 
   // Sem tomador cadastrado: oferece atalho para cadastrar ali mesmo (item A).
@@ -189,7 +266,7 @@ async function showNovaSolicitacao(){
       <div class="field">
         <label>Tomador</label>
         <select class="select" id="ns-tomador">
-          ${tomadores.map((t,i)=>`<option value="${t.id}" data-exige="${t.exige_numero_pedido?1:0}" ${t.id===ultimoId?'selected':''}>${esc(t.nome)}${i===0?' — último usado':''}</option>`).join('')}
+          ${tomadores.map((t,i)=>`<option value="${t.id}" data-exige="${t.exige_numero_pedido?1:0}" ${t.id===ultimoId?'selected':''}>${esc(t.nome)}${t.doc?' — '+esc(t.doc):''}${i===0?' · último usado':''}</option>`).join('')}
         </select>
         <button class="link-add" id="ns-add-tom" type="button">${ICON.plus}<span>Cadastrar novo tomador</span></button>
       </div>
@@ -274,12 +351,17 @@ function showConfirmacao(comRessalva){
 
 // ---- DETALHE DA SOLICITAÇÃO / NOTA -----------------------------------------
 async function showSolicitacao(id){
+  setHeader('Solicitação');
   view().innerHTML = `<div class="cli-body"><div class="spinner" style="margin:60px auto"></div></div>`;
   const s = await api.getSolicitacao(id);
   const nota = Array.isArray(s.nota) ? s.nota[0] : s.nota;
   const emitida = s.status==='emitida' && nota;
 
   const ressalva = temRessalva(s);
+  // Com ressalva e ainda editável: o cliente pode informar o número de pedido
+  // aqui mesmo e reenviar, saindo da ressalva (item 4). Usa o endpoint existente
+  // api.setNumeroPedido — nenhuma alteração de backend.
+  const podeResolverRessalva = ressalva && s.status==='solicitada';
   view().innerHTML = `
     <div class="subhead"><button class="back" id="sd-back">${ICON.back}</button><h2>${emitida?'Nota emitida':'Solicitação'}</h2></div>
     <div class="cli-body">
@@ -291,6 +373,14 @@ async function showSolicitacao(id){
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ressalva?ressalvaPill():''}${badge(s.status)}</div>
       </div>
       ${ressalva?`<div class="aviso-ressalva" style="margin-bottom:16px">${ICON.alert}<span>Falta o <strong>número de pedido</strong> exigido por este tomador. A Maradel só emite após o preenchimento.</span></div>`:''}
+      ${podeResolverRessalva?`
+      <div class="card" style="padding:16px;margin-bottom:16px">
+        <div class="field" style="margin:0">
+          <label>Número de pedido <span class="req">obrigatório</span></label>
+          <input class="input" id="sd-pedido" placeholder="Ex.: PO-2026-0042">
+        </div>
+        <button class="btn btn-primary btn-block" id="sd-save-pedido" style="margin-top:12px">Salvar e reenviar</button>
+      </div>`:''}
       <div class="card">
         <div class="kv"><span class="k">Tomador</span><span class="v">${esc(s.tomador?.nome||'—')}</span></div>
         <div class="kv"><span class="k">Documento</span><span class="v">${esc(s.tomador?.doc||'—')}</span></div>
@@ -318,6 +408,18 @@ async function showSolicitacao(id){
         ${s.status==='solicitada'?`<button class="link-danger" id="sd-cancel" style="display:block;margin:14px auto 0">Cancelar solicitação</button>`:''}`}
     </div>`;
   view().querySelector('#sd-back').onclick = showDashboard;
+  // Resolver ressalva: grava o número de pedido e recarrega (item 4).
+  const sp = view().querySelector('#sd-save-pedido');
+  if(sp) sp.onclick = async () => {
+    const ped = view().querySelector('#sd-pedido').value.trim();
+    if(!ped) return toast('Informe o número de pedido');
+    sp.disabled = true; sp.textContent = 'Salvando…';
+    try{
+      await api.setNumeroPedido(id, ped);
+      toast('Número enviado! A nota saiu da ressalva.');
+      showSolicitacao(id);
+    }catch(e){ toast('Erro: '+e.message); sp.disabled=false; sp.textContent='Salvar e reenviar'; }
+  };
   view().querySelectorAll('[data-dl]').forEach(b => b.onclick = async () => {
     const path = b.dataset.dl==='pdf' ? nota.pdf_url : nota.xml_url;
     const url = await api.urlAssinada(path);
@@ -381,6 +483,7 @@ async function showTomadores(){
 // onSalvo: callback opcional chamado após salvar (ex.: voltar para a nova
 // solicitação quando o tomador foi cadastrado pelo atalho). Default: lista.
 function showNovoTomador(onSalvo){
+  setHeader('Novo tomador');
   const voltar = onSalvo || showTomadores;
   view().innerHTML = `
     <div class="subhead"><button class="back" id="nt-back">${ICON.back}</button><h2>Novo tomador</h2></div>

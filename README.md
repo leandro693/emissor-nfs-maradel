@@ -143,11 +143,24 @@ Garanta que `http://localhost:8000` está nas **Redirect URLs** do Supabase (pas
   inclusive para usuários antigos (que vinham do magic link).
 - **Minha conta** (cliente): trocar o próprio **e-mail** e a **senha** quando quiser.
 
-### Cliente (celular)
-Dashboard com gráfico de faturamento e lista de solicitações → nova solicitação
-(tomador sugerido, máscara de R$ e CNPJ/CPF, competência no mês atual) →
-gestão de tomadores (com **e-mail opcional**) → detalhe da nota com download de
-PDF/XML e **Enviar por e-mail**.
+### Cliente — layout adaptativo (celular **e** desktop)
+A **mesma base** detecta a largura da tela e troca a navegação:
+- **Mobile:** barra inferior por módulos (Início · Solicitações · **Nova** · Tomadores
+  · Conta), com a ação **Nova solicitação** como botão **"+"** central. Conteúdo em
+  tela cheia.
+- **Desktop:** **sidebar fixa à esquerda** (ícone + rótulo, estilo app de gestão) com
+  botão de **retrair/expandir** (lembra a preferência), e um **cabeçalho** com o
+  **título da tela** e o **perfil** (nome + papel) à direita. **Nova solicitação** é um
+  item de menu em destaque — sem botão flutuante sobre o conteúdo.
+
+Fluxo: dashboard com gráfico de faturamento e lista de solicitações → nova
+solicitação (seletor de tomador exibe **nome + CNPJ/CPF** para distinguir matriz/
+filiais, máscara de R$, competência no mês atual) → gestão de tomadores (com
+**e-mail opcional**) → detalhe da nota com download de PDF/XML e **Enviar por e-mail**.
+
+Quando uma solicitação fica **com ressalva** (falta o número de pedido obrigatório),
+o dashboard mostra um **card de alerta no topo**; ao tocar, o cliente abre a nota,
+**informa o número e reenvia**, saindo da ressalva.
 
 ### Analista (desktop)
 **Clientes** (cadastro/convite) · **Fila** aberta em *Solicitada*, com contadores
