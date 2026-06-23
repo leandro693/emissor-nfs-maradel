@@ -67,11 +67,74 @@ export async function convidarCliente({ razao_social, cnpj, regime, endereco, em
   return data;
 }
 
+// ---- GESTÃO DE EQUIPE (usuários internos) — só master ----------------------
+
+// Convida um usuário interno (nome + e-mail + papel) via Edge Function
+// 'invite-equipe' (service_role). A pessoa recebe o convite e define a senha.
+export async function convidarUsuarioEquipe({ nome, email, role }){
+  const { data, error } = await supabase.functions.invoke('invite-equipe', {
+    body: { action:'invite', nome, email, role, redirectTo: redirectUrl() }
+  });
+  if(error){
+    let msg = error.message;
+    try { const ctx = await error.context?.json(); if(ctx?.error) msg = ctx.error; } catch {}
+    throw new Error(msg);
+  }
+  if(data?.error) throw new Error(data.error);
+  return data;
+}
+
+// Remove um usuário interno (exclusão real do auth) — só master.
+export async function removerUsuarioEquipe(userId){
+  const { data, error } = await supabase.functions.invoke('invite-equipe', {
+    body: { action:'remove', user_id: userId }
+  });
+  if(error){
+    let msg = error.message;
+    try { const ctx = await error.context?.json(); if(ctx?.error) msg = ctx.error; } catch {}
+    throw new Error(msg);
+  }
+  if(data?.error) throw new Error(data.error);
+  return data;
+}
+
+// Lista os usuários internos (qualquer papel que não seja 'cliente'). A RLS
+// deixa a equipe ler os profiles.
+export async function listEquipe(){
+  const { data, error } = await supabase.from('profiles')
+    .select('*').neq('role', 'cliente').order('created_at', { ascending:true });
+  if(error) throw error;
+  return data;
+}
+
+// ---- CONTATO DE ATENDIMENTO (institucional) --------------------------------
+
+// Lê o contato de atendimento (singleton). Qualquer usuário logado pode ler.
+export async function getConfigAtendimento(){
+  const { data, error } = await supabase.from('config_atendimento')
+    .select('*').eq('id', 1).maybeSingle();
+  if(error) throw error;
+  return data;
+}
+
+// Atualiza o contato de atendimento — RLS permite só admin (master/operacional).
+export async function atualizarConfigAtendimento({ nome, whatsapp, email }){
+  const { error } = await supabase.from('config_atendimento')
+    .update({ nome, whatsapp, email, updated_at: new Date().toISOString() }).eq('id', 1);
+  if(error) throw error;
+}
+
 // Lista todos os clientes (analista enxerga todos via RLS).
 export async function listClientes(){
   const { data, error } = await supabase.from('clientes').select('*').order('created_at', { ascending:false });
   if(error) throw error;
   return data;
+}
+
+// Exclui um cliente (prestador). RLS permite SOMENTE o admin_master.
+export async function excluirCliente(id){
+  const { error } = await supabase.from('clientes').delete().eq('id', id);
+  if(error) throw error;
 }
 
 // Atualiza dados editáveis do próprio cliente (prestador) — ex.: telefone
@@ -154,11 +217,12 @@ export async function listSolicitacoesAnalista({ status, busca } = {}){
   return rows;
 }
 
-// Conta solicitações por status (para os contadores do topo).
+// Conta solicitações por status (para os contadores do topo). Inclui a fila
+// de conferência (item 2).
 export async function contadoresPorStatus(){
   const { data, error } = await supabase.from('solicitacoes').select('status');
   if(error) throw error;
-  const c = { solicitada:0, em_emissao:0, emitida:0, cancelada:0 };
+  const c = { solicitada:0, em_emissao:0, aguardando_conferencia:0, emitida:0, cancelada:0 };
   data.forEach(r => { c[r.status] = (c[r.status]||0) + 1; });
   return c;
 }
@@ -233,9 +297,12 @@ export async function uploadArquivo(clienteId, solicitacaoId, file, tipo){
   return path;
 }
 
-// Marca a solicitação como emitida: cria/atualiza a nota e muda o status.
-export async function emitirNota({ solicitacaoId, numero, pdfPath, xmlPath }){
-  // upsert da nota (uma por solicitação)
+// id do usuário logado (atalho reutilizado).
+async function uid(){ return (await supabase.auth.getUser()).data.user.id; }
+
+// upsert da nota (uma por solicitação). Não muda o status — quem muda é o
+// fluxo (preparo/emissão/conferência), respeitando o papel.
+async function upsertNota({ solicitacaoId, numero, pdfPath, xmlPath }){
   const payload = {
     solicitacao_id: solicitacaoId,
     numero,
@@ -243,7 +310,6 @@ export async function emitirNota({ solicitacaoId, numero, pdfPath, xmlPath }){
     pdf_url: pdfPath || null,
     xml_url: xmlPath || null
   };
-  // verifica se já existe nota
   const { data: existente } = await supabase.from('notas')
     .select('id').eq('solicitacao_id', solicitacaoId).maybeSingle();
   if(existente){
@@ -253,7 +319,69 @@ export async function emitirNota({ solicitacaoId, numero, pdfPath, xmlPath }){
     const { error } = await supabase.from('notas').insert(payload);
     if(error) throw error;
   }
+}
+
+// Grava o rastreamento interno (quem preparou/conferiu). Tabela só da equipe —
+// o cliente nunca lê. Faz upsert por solicitação, atualizando só os campos dados.
+async function gravarInterno(solicitacaoId, campos){
+  const { error } = await supabase.from('solicitacao_interno')
+    .upsert({ solicitacao_id: solicitacaoId, ...campos, updated_at: new Date().toISOString() },
+            { onConflict: 'solicitacao_id' });
+  if(error) throw error;
+}
+
+// Salva/atualiza a nota (número/arquivos) SEM mudar o status. Usado na
+// aprovação da conferência quando o analista ajusta algo antes de liberar.
+export async function salvarNota(args){ await upsertNota(args); }
+
+// Lê o rastreamento interno de uma solicitação (equipe). Null se não houver.
+export async function getInterno(solicitacaoId){
+  const { data, error } = await supabase.from('solicitacao_interno')
+    .select('*').eq('solicitacao_id', solicitacaoId).maybeSingle();
+  if(error) throw error;
+  return data;
+}
+
+// AUXILIAR: finaliza o preparo. Grava a nota (número/arquivos), registra quem
+// preparou e manda para a fila de conferência (NÃO emite, cliente não é avisado).
+export async function enviarParaConferencia({ solicitacaoId, numero, pdfPath, xmlPath, nome }){
+  await upsertNota({ solicitacaoId, numero, pdfPath, xmlPath });
+  await gravarInterno(solicitacaoId, {
+    preparada_por: await uid(), preparada_por_nome: nome || null,
+    preparada_em: new Date().toISOString(), observacao: null
+  });
+  await setStatus(solicitacaoId, 'aguardando_conferencia');
+}
+
+// ANALISTA+: emite diretamente (sem passar por auxiliar). Registra a mesma
+// pessoa como preparou e conferiu, e libera (status 'emitida').
+export async function emitirNota({ solicitacaoId, numero, pdfPath, xmlPath, nome }){
+  await upsertNota({ solicitacaoId, numero, pdfPath, xmlPath });
+  const u = await uid(), agora = new Date().toISOString();
+  await gravarInterno(solicitacaoId, {
+    preparada_por: u, preparada_por_nome: nome || null, preparada_em: agora,
+    conferida_por: u, conferida_por_nome: nome || null, conferida_em: agora, observacao: null
+  });
+  await setStatus(solicitacaoId, 'emitida'); // trigger guard_emissao garante o papel
+}
+
+// ANALISTA+: aprova um item da fila de conferência → libera a emissão.
+export async function aprovarConferencia({ solicitacaoId, nome }){
+  await gravarInterno(solicitacaoId, {
+    conferida_por: await uid(), conferida_por_nome: nome || null,
+    conferida_em: new Date().toISOString()
+  });
   await setStatus(solicitacaoId, 'emitida');
+}
+
+// ANALISTA+: devolve ao auxiliar com observação (sai da fila, volta a "em emissão").
+export async function devolverConferencia({ solicitacaoId, observacao, nome }){
+  await gravarInterno(solicitacaoId, {
+    observacao: observacao || null,
+    conferida_por: await uid(), conferida_por_nome: nome || null,
+    conferida_em: new Date().toISOString()
+  });
+  await setStatus(solicitacaoId, 'em_emissao');
 }
 
 // Gera uma URL assinada (temporária) para baixar um arquivo do bucket privado.

@@ -162,11 +162,37 @@ Quando uma solicitação fica **com ressalva** (falta o número de pedido obriga
 o dashboard mostra um **card de alerta no topo**; ao tocar, o cliente abre a nota,
 **informa o número e reenvia**, saindo da ressalva.
 
-### Analista (desktop)
+### Equipe Maradel (desktop)
 **Clientes** (cadastro/convite) · **Fila** aberta em *Solicitada*, com contadores
 por status e busca por cliente/CNPJ → detalhe numa tela só, com **copiar** ao lado
 de cada campo, número da nota, upload de PDF/XML, **Marcar como emitida** e
 **Enviar por e-mail**.
+
+### Papéis e permissões (hierarquia)
+Quatro papéis internos, do maior para o menor: **admin_master** (acesso total),
+**admin_operacional** (dia a dia: clientes, solicitações, emitir, conferir,
+editar o contato de atendimento — **não** cadastra/exclui usuários, nem exclui
+clientes/notas), **analista** (todo o processo fiscal, inclusive conferir/liberar
+e enviar ao cliente) e **auxiliar** (prepara tudo, mas **não** envia ao cliente
+nem conclui a emissão). O papel fica em `profiles.role`. A RLS por papel
+(funções `is_master`/`is_admin`/`can_conferir`/`is_staff`) garante as regras no
+banco — não só na interface. O cabeçalho mostra o **nome real** e o **papel**.
+
+### Fluxo de conferência (aprovação)
+Quando o **auxiliar** finaliza, a solicitação entra em **"aguardando
+conferência"** (não vai ao cliente, não conta como emitida). Um **analista+** vê
+a **fila de Conferência** (com contador no menu) e **aprova/libera** (vira
+emitida) ou **devolve com observação** ao auxiliar. A trava é real: o *trigger*
+`trg_solic_guard_emissao` recusa a emissão por quem não pode conferir. Para o
+cliente, esse estado aparece apenas como "Em emissão" — o processo interno não
+vaza.
+
+### Rastreamento interno + contato de atendimento
+Quem **preparou** e quem **conferiu/liberou** cada nota (com data/hora) fica na
+tabela `solicitacao_interno`, **visível só para a equipe** (o cliente nunca vê).
+O **contato de atendimento** institucional (`config_atendimento`: nome, WhatsApp,
+e-mail) é editável por admin em **Configurações** e aparece para o cliente em
+**"Precisa de ajuda?"**, com WhatsApp via `wa.me` e e-mail clicável.
 
 ### Número de pedido + bloqueio (item B)
 - Cada **solicitação** tem um campo **número de pedido** (opcional por padrão).

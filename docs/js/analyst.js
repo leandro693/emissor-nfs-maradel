@@ -6,10 +6,20 @@ import * as api from './api.js';
 import {
   ICON, brl, fmtCompetencia, fmtCompetenciaShort, fmtDate, fmtDateTime, relTime, initials, badge,
   esc, toast, copyToClipboard, maskDocInput, openEnvioEmail, openEnvioWhatsApp,
-  ressalvaPill, notaPublicUrl, linkPublicoCard, bindLinkPublico, STATUS_LABEL
+  ressalvaPill, notaPublicUrl, linkPublicoCard, bindLinkPublico, STATUS_LABEL,
+  roleLabel, openModal, closeModal
 } from './ui.js';
 
 let CTX = { profile:null, root:null, status:'solicitada', busca:'' };
+
+// Permissões por papel (lê o papel do profile logado). Hierarquia:
+//   admin_master > admin_operacional > analista > auxiliar.
+const pode = {
+  master:   () => CTX.profile?.role === 'admin_master',
+  admin:    () => ['admin_master','admin_operacional'].includes(CTX.profile?.role),
+  conferir: () => ['admin_master','admin_operacional','analista'].includes(CTX.profile?.role),
+  auxiliar: () => CTX.profile?.role === 'auxiliar',
+};
 
 // Ponto de entrada: monta o shell do analista e abre na fila "solicitada".
 export async function mountAnalista(root, profile){
@@ -21,31 +31,41 @@ export async function mountAnalista(root, profile){
 const main = () => CTX.root.querySelector('#an-main');
 
 function renderShell(){
-  const nome = CTX.profile.nome || 'Analista';
+  // Cabeçalho mostra o NOME REAL e o PAPEL do usuário logado (item 3).
+  const nome = CTX.profile.nome || 'Equipe Maradel';
+  // Menu conforme o papel: Conferência (analista+), Equipe (master),
+  // Configurações (admin). Fila/Notas/Clientes para toda a equipe.
+  const navItems = [
+    `<button class="item active" data-nav="fila">${ICON.list}<span>Fila</span></button>`,
+    pode.conferir() ? `<button class="item" data-nav="conferencia">${ICON.check}<span>Conferência</span><span class="nav-cnt" id="nav-conf" hidden></span></button>` : '',
+    `<button class="item" data-nav="notas">${ICON.file}<span>Notas emitidas</span></button>`,
+    `<button class="item" data-nav="clientes">${ICON.users}<span>Clientes</span></button>`,
+    pode.master() ? `<button class="item" data-nav="equipe">${ICON.user}<span>Equipe</span></button>` : '',
+    pode.admin()  ? `<button class="item" data-nav="config">${ICON.settings}<span>Configurações</span></button>` : '',
+  ].filter(Boolean).join('');
   CTX.root.innerHTML = `
     <div class="an">
       <aside class="an-side">
         <div class="brand"><img src="assets/logo-horizontal-white.png" alt="Maradel"></div>
-        <nav class="nav">
-          <button class="item active" data-nav="fila">${ICON.list}<span>Fila</span></button>
-          <button class="item" data-nav="notas">${ICON.file}<span>Notas emitidas</span></button>
-          <button class="item" data-nav="clientes">${ICON.users}<span>Clientes</span></button>
-        </nav>
+        <nav class="nav">${navItems}</nav>
         <div class="user">
           <div class="ava">${initials(nome)}</div>
-          <div style="min-width:0"><div class="nm">${esc(nome)}</div><div class="rl">Analista fiscal</div></div>
+          <div style="min-width:0"><div class="nm">${esc(nome)}</div><div class="rl">${roleLabel(CTX.profile.role)}</div></div>
           <button id="an-logout" title="Sair" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;width:20px;height:20px">${ICON.logout}</button>
         </div>
       </aside>
       <div class="an-main" id="an-main"></div>
     </div>`;
   CTX.root.querySelector('#an-logout').onclick = async () => { await api.signOut(); location.reload(); };
-  // Navegação lateral: Fila / Notas emitidas / Clientes.
+  // Navegação lateral.
   CTX.root.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => {
     const n = b.dataset.nav;
     if(n==='fila'){ CTX.status='solicitada'; showFila(); }
+    else if(n==='conferencia'){ CTX.status='aguardando_conferencia'; showFila(); }
     else if(n==='notas'){ CTX.status='emitida'; showFila(); }
-    else showClientes();
+    else if(n==='clientes'){ showClientes(); }
+    else if(n==='equipe'){ showEquipe(); }
+    else if(n==='config'){ showConfiguracoes(); }
   });
 }
 
@@ -57,27 +77,37 @@ function setNav(nav){
 
 // ---- FILA -------------------------------------------------------------------
 async function showFila(){
-  setNav(CTX.status==='emitida' ? 'notas' : 'fila');
+  setNav(CTX.status==='emitida' ? 'notas' : CTX.status==='aguardando_conferencia' ? 'conferencia' : 'fila');
   main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
   const [cont, rows] = await Promise.all([
     api.contadoresPorStatus(),
     api.listSolicitacoesAnalista({ status:CTX.status, busca:CTX.busca })
   ]);
   const hoje = new Date().toLocaleDateString('pt-BR',{ weekday:'long', day:'2-digit', month:'long' });
-  const pend = cont.solicitada;
+  // Título conforme a fila aberta.
+  const titulo = CTX.status==='aguardando_conferencia' ? 'Fila de conferência'
+    : CTX.status==='emitida' ? 'Notas emitidas' : 'Fila de solicitações';
+  // Resumo do dia: prioriza a conferência quando há itens aguardando.
+  const conf = cont.aguardando_conferencia, pend = cont.solicitada;
+  const day = conf ? `${conf} aguardando conferência` : (pend ? `${pend} aguardando ação` : 'tudo em dia');
+
+  // Atualiza a bolha de Conferência no menu lateral.
+  const navConf = CTX.root.querySelector('#nav-conf');
+  if(navConf){ navConf.textContent = conf; navConf.hidden = !conf; }
 
   main().innerHTML = `
     <div class="an-head">
       <div class="row1">
         <div>
-          <h1>Fila de solicitações</h1>
-          <div class="day">${hoje.charAt(0).toUpperCase()+hoje.slice(1)} · ${pend?pend+' aguardando ação':'tudo em dia'}</div>
+          <h1>${titulo}</h1>
+          <div class="day">${hoje.charAt(0).toUpperCase()+hoje.slice(1)} · ${day}</div>
         </div>
         <div class="an-search">${ICON.search}<input id="an-busca" placeholder="Buscar cliente ou CNPJ…" value="${esc(CTX.busca)}"></div>
       </div>
       <div class="an-tabs">
         ${tab('solicitada', cont.solicitada)}
         ${tab('em_emissao', cont.em_emissao)}
+        ${pode.conferir() ? tab('aguardando_conferencia', cont.aguardando_conferencia) : ''}
         ${tab('emitida', cont.emitida)}
         ${tab('cancelada', cont.cancelada)}
       </div>
@@ -100,7 +130,9 @@ async function showFila(){
 
 function tab(status, n){
   const active = CTX.status===status;
-  return `<button class="an-tab ${active?'active':''}" data-tab="${status}"><span>${STATUS_LABEL[status]}</span><span class="cnt">${n}</span></button>`;
+  // Rótulo curto para a aba de conferência (o nome completo é longo demais).
+  const label = status==='aguardando_conferencia' ? 'Conferência' : STATUS_LABEL[status];
+  return `<button class="an-tab ${active?'active':''}" data-tab="${status}"><span>${label}</span><span class="cnt">${n}</span></button>`;
 }
 
 // Ressalva: tomador exige número de pedido e ele ainda não foi preenchido.
@@ -126,6 +158,11 @@ function filaEmpty(status){
       <h3>Nenhuma solicitação pendente 🎉</h3>
       <p>Você zerou a fila. Novas solicitações aparecem aqui automaticamente.</p></div>`;
   }
+  if(status==='aguardando_conferencia'){
+    return `<div class="empty"><div class="ico" style="color:var(--st-emit-fg);border-radius:26px;width:104px;height:104px"><span style="width:48px;height:48px">${ICON.check}</span></div>
+      <h3>Conferência em dia ✅</h3>
+      <p>Nada aguardando liberação. Quando o auxiliar finalizar um preparo, ele aparece aqui.</p></div>`;
+  }
   return `<div class="empty"><div class="ico"><span style="width:42px;height:42px">${ICON.file}</span></div>
     <h3>Nada em "${STATUS_LABEL[status]}"</h3><p>Não há solicitações com este status no momento.</p></div>`;
 }
@@ -136,6 +173,8 @@ async function showClientes(){
   setNav('clientes');
   main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
   const clientes = await api.listClientes();
+  const master = pode.master();
+  const cols = master ? '2.2fr 1.6fr 1fr 1.8fr 60px' : '2.2fr 1.6fr 1fr 1.8fr';
   main().innerHTML = `
     <div class="an-head">
       <div class="row1">
@@ -145,18 +184,25 @@ async function showClientes(){
     </div>
     <div class="an-content">
       ${clientes.length ? `
-        <div class="tbl-head" style="grid-template-columns:2.2fr 1.6fr 1fr 1.8fr"><span>Razão social</span><span>CNPJ</span><span>Regime</span><span>E-mail</span></div>
+        <div class="tbl-head" style="grid-template-columns:${cols}"><span>Razão social</span><span>CNPJ</span><span>Regime</span><span>E-mail</span>${master?'<span></span>':''}</div>
         <div class="tbl">${clientes.map(c=>`
-          <div class="tbl-row" style="grid-template-columns:2.2fr 1.6fr 1fr 1.8fr;cursor:default">
+          <div class="tbl-row" style="grid-template-columns:${cols};cursor:default">
             <div class="cli-nm">${esc(c.razao_social)}</div>
             <div class="tom">${esc(c.cnpj)}</div>
             <div class="svc">${esc(c.regime||'—')}</div>
             <div class="svc">${esc(c.email||'—')}</div>
+            ${master?`<div style="text-align:right"><button class="icon-danger" data-del-cli="${c.id}" data-nm="${esc(c.razao_social)}" title="Excluir cliente">${ICON.x}</button></div>`:''}
           </div>`).join('')}</div>`
         : `<div class="empty"><div class="ico"><span style="width:42px;height:42px">${ICON.users}</span></div>
             <h3>Nenhum cliente ainda</h3><p>Cadastre o primeiro prestador. Ele recebe um convite por e-mail para definir a senha.</p></div>`}
     </div>`;
   main().querySelector('#cl-novo').onclick = showNovoCliente;
+  // Exclusão de cliente é exclusiva do master (item 1) — RLS também bloqueia.
+  main().querySelectorAll('[data-del-cli]').forEach(b => b.onclick = async () => {
+    if(!confirm(`Excluir o cliente "${b.dataset.nm}"? Esta ação remove o cadastro e não pode ser desfeita.`)) return;
+    try{ await api.excluirCliente(b.dataset.delCli); toast('Cliente excluído'); showClientes(); }
+    catch(e){ toast('Erro: '+e.message); }
+  });
 }
 
 // Formulário de cadastro completo do cliente. Ao salvar, dispara o convite
@@ -198,6 +244,111 @@ function showNovoCliente(){
   };
 }
 
+// ---- EQUIPE (gestão de usuários internos) — só master (item 3) -------------
+async function showEquipe(){
+  setNav('equipe');
+  main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
+  const equipe = await api.listEquipe();
+  main().innerHTML = `
+    <div class="an-head">
+      <div class="row1">
+        <div><h1>Equipe</h1><div class="day">${equipe.length} usuário(s) interno(s)</div></div>
+        <button class="btn btn-primary btn-sm" id="eq-novo">${ICON.plus}<span>Novo usuário</span></button>
+      </div>
+    </div>
+    <div class="an-content">
+      <div class="tbl-head" style="grid-template-columns:2fr 2.4fr 1.6fr 70px"><span>Nome</span><span>E-mail</span><span>Papel</span><span></span></div>
+      <div class="tbl">${equipe.map(u=>`
+        <div class="tbl-row" style="grid-template-columns:2fr 2.4fr 1.6fr 70px;cursor:default">
+          <div class="cli-nm">${esc(u.nome||'—')}</div>
+          <div class="svc">${esc(u.email||'—')}</div>
+          <div><span class="role-pill">${roleLabel(u.role)}</span></div>
+          <div style="text-align:right">${(u.role!=='admin_master' && u.id!==CTX.profile.id)
+            ? `<button class="icon-danger" data-del="${u.id}" data-nm="${esc(u.nome||u.email||'')}" title="Remover usuário">${ICON.x}</button>` : ''}</div>
+        </div>`).join('')}</div>
+    </div>`;
+  main().querySelector('#eq-novo').onclick = showNovoUsuario;
+  main().querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if(!confirm(`Remover ${b.dataset.nm} da equipe? Esta ação não pode ser desfeita.`)) return;
+    try{ await api.removerUsuarioEquipe(b.dataset.del); toast('Usuário removido'); showEquipe(); }
+    catch(e){ toast('Erro: '+e.message); }
+  });
+}
+
+// Formulário de convite de usuário interno (nome + e-mail + papel).
+function showNovoUsuario(){
+  main().innerHTML = `
+    <div class="det-head">
+      <button class="back" id="nu-back">${ICON.back}</button>
+      <div><h1>Novo usuário</h1>
+        <div class="sub" style="font-size:12.5px;color:var(--mist);margin-top:2px">A pessoa recebe um convite por e-mail e define a própria senha.</div></div>
+    </div>
+    <div class="an-content" style="max-width:520px">
+      <div class="field"><label>Nome</label><input class="input" id="nu-nome" placeholder="Nome completo"></div>
+      <div class="field"><label>E-mail</label><input class="input" id="nu-email" type="email" placeholder="pessoa@maradelcontabil.com"></div>
+      <div class="field"><label>Papel</label>
+        <select class="select" id="nu-role">
+          <option value="auxiliar">Auxiliar — prepara o trabalho (vai para conferência)</option>
+          <option value="analista">Analista fiscal — emite e confere</option>
+          <option value="admin_operacional">Admin operacional — gerencia o dia a dia</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-block" id="nu-save" style="margin-top:8px">${ICON.send}<span>Salvar e enviar convite</span></button>
+    </div>`;
+  main().querySelector('#nu-back').onclick = showEquipe;
+  main().querySelector('#nu-save').onclick = async () => {
+    const nome = main().querySelector('#nu-nome').value.trim();
+    const email = main().querySelector('#nu-email').value.trim();
+    const role = main().querySelector('#nu-role').value;
+    if(!nome) return toast('Informe o nome');
+    if(!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return toast('Informe um e-mail válido');
+    const btn = main().querySelector('#nu-save'); btn.disabled=true; btn.innerHTML='Enviando convite…';
+    try{
+      await api.convidarUsuarioEquipe({ nome, email, role });
+      toast('Usuário convidado'); showEquipe();
+    }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.innerHTML=`${ICON.send}<span>Salvar e enviar convite</span>`; }
+  };
+}
+
+// ---- CONFIGURAÇÕES — contato de atendimento (admin, item 5) ----------------
+// Formata dígitos do WhatsApp para exibição amigável e normaliza para salvar.
+function fmtWpp(d){
+  d = String(d||'').replace(/\D/g,'').replace(/^55/,'');
+  if(d.length===11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  if(d.length===10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return d;
+}
+function wppDigits(v){ let d = String(v||'').replace(/\D/g,''); if(d && !d.startsWith('55')) d = '55'+d; return d; }
+
+async function showConfiguracoes(){
+  setNav('config');
+  main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
+  const cfg = (await api.getConfigAtendimento()) || {};
+  main().innerHTML = `
+    <div class="an-head"><div class="row1">
+      <div><h1>Configurações</h1><div class="day">Contato de atendimento exibido aos clientes</div></div>
+    </div></div>
+    <div class="an-content" style="max-width:520px">
+      <div class="card" style="padding:12px 16px;display:flex;gap:9px;align-items:flex-start;margin-bottom:18px">
+        <span style="color:var(--taupe);width:17px;flex:none">${ICON.info}</span>
+        <span style="font-size:12.5px;color:var(--taupe);line-height:1.5">Estes dados aparecem para o cliente em "Precisa de ajuda?". O WhatsApp vira um link que abre a conversa.</span>
+      </div>
+      <div class="field"><label>Nome do atendimento</label><input class="input" id="cf-nome" value="${esc(cfg.nome||'')}" placeholder="Ex.: Gabriela"></div>
+      <div class="field"><label>WhatsApp</label><input class="input" id="cf-wpp" inputmode="tel" value="${esc(fmtWpp(cfg.whatsapp))}" placeholder="(11) 94272-2105"></div>
+      <div class="field"><label>E-mail</label><input class="input" id="cf-email" type="email" value="${esc(cfg.email||'')}" placeholder="atendimento@maradelcontabil.com"></div>
+      <button class="btn btn-primary btn-block" id="cf-save" style="margin-top:8px">Salvar contato</button>
+    </div>`;
+  main().querySelector('#cf-save').onclick = async () => {
+    const nome = main().querySelector('#cf-nome').value.trim() || null;
+    const whatsapp = wppDigits(main().querySelector('#cf-wpp').value) || null;
+    const email = main().querySelector('#cf-email').value.trim() || null;
+    const btn = main().querySelector('#cf-save'); btn.disabled=true; btn.textContent='Salvando…';
+    try{ await api.atualizarConfigAtendimento({ nome, whatsapp, email }); toast('Contato de atendimento atualizado'); }
+    catch(e){ toast('Erro: '+e.message); }
+    btn.disabled=false; btn.textContent='Salvar contato';
+  };
+}
+
 // ---- DETALHE ----------------------------------------------------------------
 let DET = { pdf:null, xml:null }; // arquivos selecionados (ainda não enviados)
 
@@ -214,6 +365,31 @@ async function showDetalhe(id){
   // (trigger) é a guarda real, este é o aviso/bloqueio visual que a acompanha.
   const exigePedido = !!s.tomador?.exige_numero_pedido;
   const pedidoVazio = !String(s.numero_pedido||'').trim();
+
+  // Ações conforme o papel (fluxo de conferência, item 2):
+  //  - auxiliar: "Enviar para conferência" (não emite, não envia ao cliente);
+  //  - analista+: "Marcar como emitida" no fluxo normal; na fila de conferência,
+  //    "Aprovar e liberar" / "Devolver ao auxiliar".
+  const emConferencia = s.status === 'aguardando_conferencia';
+  const conf = pode.conferir();
+  const aux  = pode.auxiliar();
+  const podeEnviarCliente = emitida && conf;          // auxiliar nunca envia ao cliente
+  const tituloPainel = aux ? 'Preparar emissão' : 'Registrar emissão';
+  let acoesHTML;
+  if(emitida){
+    acoesHTML = conf
+      ? `<button class="btn btn-primary btn-block dt-finalize" id="dt-emitir">${ICON.check}<span>Atualizar emissão</span></button>`
+      : `<div class="aviso-ressalva" style="background:var(--st-emit-bg);border-color:rgba(74,124,89,.4);color:var(--st-emit-fg)">${ICON.check}<span>Nota emitida.</span></div>`;
+  } else if(emConferencia){
+    acoesHTML = conf
+      ? `<button class="btn btn-primary btn-block dt-finalize" id="dt-aprovar">${ICON.check}<span>Aprovar e liberar</span></button>
+         <button class="btn btn-outline btn-block" id="dt-devolver">${ICON.back}<span>Devolver ao auxiliar</span></button>`
+      : `<div class="aviso-ressalva">${ICON.info}<span>Enviado para conferência. Aguarde a liberação de um analista.</span></div>`;
+  } else {
+    acoesHTML = aux
+      ? `<button class="btn btn-primary btn-block dt-finalize" id="dt-conferir">${ICON.send}<span>Enviar para conferência</span></button>`
+      : `<button class="btn btn-primary btn-block dt-finalize" id="dt-emitir">${ICON.check}<span>Marcar como emitida</span></button>`;
+  }
 
   main().innerHTML = `
     <div class="det">
@@ -239,11 +415,12 @@ async function showDetalhe(id){
             <span style="color:var(--taupe);width:16px">${ICON.users}</span>
             <span style="font-size:12.5px;color:var(--taupe)">Prestador: <strong style="color:var(--chumbo)">${esc(s.cliente?.razao_social||'—')}</strong> · CNPJ ${esc(s.cliente?.cnpj||'—')}</span>
           </div>
+          <div id="dt-interno" style="margin-top:18px"></div>
           <div id="dt-historico" style="margin-top:18px"></div>
         </div>
         <div class="det-right">
-          <div><div style="font-size:16px;font-weight:600">Registrar emissão</div>
-            <div style="font-size:12.5px;color:var(--taupe);margin-top:3px;line-height:1.5">Emita no portal, cole o número e suba os arquivos.</div></div>
+          <div><div style="font-size:16px;font-weight:600">${tituloPainel}</div>
+            <div style="font-size:12.5px;color:var(--taupe);margin-top:3px;line-height:1.5">${aux?'Prepare os dados, cole o número e suba os arquivos. Ao finalizar, vai para conferência.':'Emita no portal, cole o número e suba os arquivos.'}</div></div>
           <div class="field" style="margin:0">
             <label>Número de pedido${exigePedido?' <span class="req">obrigatório</span>':' <span class="opt">opcional</span>'}</label>
             <input class="input" id="dt-pedido" value="${esc(s.numero_pedido||'')}" placeholder="${exigePedido?'Preencha para liberar a emissão':'PO-2026-0042'}">
@@ -258,8 +435,8 @@ async function showDetalhe(id){
           <input type="file" id="dt-file-xml" accept=".xml,application/xml,text/xml" class="hidden">
           ${emitida?linkPublicoCard(nota.public_token):''}
           <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px">
-            <button class="btn btn-primary btn-block" id="dt-emitir">${ICON.check}<span>${emitida?'Atualizar emissão':'Marcar como emitida'}</span></button>
-            ${emitida?`<div class="btn-row"><button class="btn btn-ghost" id="dt-email">${ICON.mail}<span>E-mail</span></button><button class="btn btn-ghost" id="dt-whats">${ICON.whatsapp}<span>WhatsApp</span></button></div>`:''}
+            ${acoesHTML}
+            ${podeEnviarCliente?`<div class="btn-row"><button class="btn btn-ghost" id="dt-email">${ICON.mail}<span>E-mail</span></button><button class="btn btn-ghost" id="dt-whats">${ICON.whatsapp}<span>WhatsApp</span></button></div>`:''}
             ${s.status!=='cancelada'?`<button class="link-danger" id="dt-cancel" style="margin:0 auto">Cancelar solicitação</button>`:''}
           </div>
         </div>
@@ -279,22 +456,26 @@ async function showDetalhe(id){
   fpdf.onchange = () => { DET.pdf = fpdf.files[0]; refreshDrop('pdf', DET.pdf?.name); };
   fxml.onchange = () => { DET.xml = fxml.files[0]; refreshDrop('xml', DET.xml?.name); };
 
-  // Bloqueio dinâmico: liga/desliga o aviso e o botão emitir conforme o pedido.
+  // Bloqueio dinâmico: trava os botões de finalização (emitir / enviar para
+  // conferência / aprovar) enquanto o número de pedido obrigatório está vazio.
   const inpPedido = main().querySelector('#dt-pedido');
-  const btnEmitir = main().querySelector('#dt-emitir');
   const aviso = main().querySelector('#dt-bloqueio');
   function syncBloqueio(){
-    const vazio = !inpPedido.value.trim();
-    const bloq = exigePedido && vazio;
+    const bloq = exigePedido && !inpPedido.value.trim();
     aviso.classList.toggle('hidden', !bloq);
-    btnEmitir.disabled = bloq;
-    btnEmitir.title = bloq ? 'Preencha o número de pedido para emitir' : '';
+    main().querySelectorAll('.dt-finalize').forEach(b => {
+      b.disabled = bloq; b.title = bloq ? 'Preencha o número de pedido para liberar' : '';
+    });
   }
   inpPedido.oninput = syncBloqueio;
   syncBloqueio();
 
-  // emitir
-  btnEmitir.onclick = () => emitir(s);
+  // Ações por papel (cada botão só existe conforme o papel/estado).
+  const onFin = (modo) => () => finalizar(s, modo, nota);
+  main().querySelector('#dt-emitir')?.addEventListener('click', onFin('emitir'));
+  main().querySelector('#dt-conferir')?.addEventListener('click', onFin('conferir'));
+  main().querySelector('#dt-aprovar')?.addEventListener('click', onFin('aprovar'));
+  main().querySelector('#dt-devolver')?.addEventListener('click', () => devolver(s));
 
   // link público (copiar / abrir / regenerar) — só quando emitida
   if(emitida) bindLinkPublico(main(), nota.public_token, {
@@ -328,8 +509,28 @@ async function showDetalhe(id){
   const c = main().querySelector('#dt-cancel');
   if(c) c.onclick = async () => { await api.setStatus(s.id,'cancelada'); toast('Solicitação cancelada'); showFila(); };
 
+  // controle interno (quem preparou/conferiu) — só a equipe vê (item 4)
+  carregarInterno(s.id);
   // histórico (envios + aberturas) — carrega assíncrono
   if(nota) carregarHistorico(nota.id);
+}
+
+// Carrega o rastreamento interno (executou/conferiu) — visível só para a equipe.
+async function carregarInterno(solicitacaoId){
+  const box = main().querySelector('#dt-interno');
+  if(!box) return;
+  let it = null;
+  try{ it = await api.getInterno(solicitacaoId); }catch{}
+  if(!it || (!it.preparada_por_nome && !it.conferida_por_nome && !it.observacao)){ box.innerHTML = ''; return; }
+  const linha = (k, nome, em) => nome
+    ? `<div class="kv"><span class="k">${k}</span><span class="v">${esc(nome)}${em?' · '+fmtDateTime(em):''}</span></div>` : '';
+  box.innerHTML = `
+    <div class="cap" style="margin-bottom:8px">Controle interno · só a equipe vê</div>
+    <div class="card" style="padding:2px 14px">
+      ${linha('Executou (preparou)', it.preparada_por_nome, it.preparada_em)}
+      ${linha('Conferiu / liberou', it.conferida_por_nome, it.conferida_em)}
+      ${it.observacao?`<div class="kv"><span class="k">Observação</span><span class="v" style="color:var(--terracota-dark)">${esc(it.observacao)}</span></div>`:''}
+    </div>`;
 }
 
 // Registra o envio no histórico e recarrega a lista (item F).
@@ -401,26 +602,60 @@ function refreshDrop(tipo, name){
   main().querySelector(`[data-drop-s="${tipo}"]`).textContent = `${tipo.toUpperCase()} · pronto para enviar`;
 }
 
-// Fluxo de emissão: salva o número de pedido (item B), sobe arquivos (se
-// houver), grava a nota e muda o status. O bloqueio do pedido tem dupla guarda:
-// aqui (pré-checagem) e no banco (trigger trg_notas_check_pedido).
-async function emitir(s){
+// Finaliza o trabalho conforme o papel/ação (item 2):
+//   modo 'conferir' (auxiliar) → envia para a fila de conferência;
+//   modo 'emitir'   (analista+) → emite direto (executou=conferiu=ele);
+//   modo 'aprovar'  (analista+) → libera um item da fila de conferência.
+// Salva o número de pedido (item B) e sobe arquivos novos, preservando os já
+// anexados no preparo. O bloqueio do pedido tem dupla guarda: aqui e no banco.
+async function finalizar(s, modo, nota){
   const numero = main().querySelector('#dt-num').value.trim();
   const pedido = main().querySelector('#dt-pedido').value.trim();
-  if(s.tomador?.exige_numero_pedido && !pedido){
-    return toast('Número de pedido obrigatório para este tomador');
-  }
+  if(s.tomador?.exige_numero_pedido && !pedido) return toast('Número de pedido obrigatório para este tomador');
   if(!numero) return toast('Informe o número da nota');
-  const btn = main().querySelector('#dt-emitir'); btn.disabled = true; btn.innerHTML = 'Emitindo…';
+  const btn = main().querySelector('.dt-finalize'); if(btn){ btn.disabled = true; btn.innerHTML = 'Processando…'; }
+  const nome = CTX.profile.nome || null;
   try{
-    // Persiste/atualiza o número de pedido antes de emitir (libera o trigger).
-    if(pedido !== String(s.numero_pedido||'').trim()){
-      await api.setNumeroPedido(s.id, pedido || null);
+    if(pedido !== String(s.numero_pedido||'').trim()) await api.setNumeroPedido(s.id, pedido || null);
+    // Mantém o arquivo já anexado se nenhum novo foi escolhido.
+    const pdfPath = DET.pdf ? await api.uploadArquivo(s.cliente_id, s.id, DET.pdf, 'pdf') : (nota?.pdf_url || null);
+    const xmlPath = DET.xml ? await api.uploadArquivo(s.cliente_id, s.id, DET.xml, 'xml') : (nota?.xml_url || null);
+    if(modo === 'conferir'){
+      await api.enviarParaConferencia({ solicitacaoId:s.id, numero, pdfPath, xmlPath, nome });
+      toast('Enviado para conferência'); CTX.status = 'aguardando_conferencia';
+    } else if(modo === 'aprovar'){
+      await api.salvarNota({ solicitacaoId:s.id, numero, pdfPath, xmlPath });
+      await api.aprovarConferencia({ solicitacaoId:s.id, nome });
+      toast('Conferência aprovada — nota liberada'); CTX.status = 'emitida';
+    } else {
+      await api.emitirNota({ solicitacaoId:s.id, numero, pdfPath, xmlPath, nome });
+      toast('Nota marcada como emitida'); CTX.status = 'solicitada';
     }
-    let pdfPath = null, xmlPath = null;
-    if(DET.pdf) pdfPath = await api.uploadArquivo(s.cliente_id, s.id, DET.pdf, 'pdf');
-    if(DET.xml) xmlPath = await api.uploadArquivo(s.cliente_id, s.id, DET.xml, 'xml');
-    await api.emitirNota({ solicitacaoId:s.id, numero, pdfPath, xmlPath });
-    toast('Nota marcada como emitida'); CTX.status='solicitada'; showFila();
-  }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.innerHTML = `${ICON.check}<span>Marcar como emitida</span>`; }
+    showFila();
+  }catch(e){ toast('Erro: '+e.message); if(btn){ btn.disabled=false; btn.innerHTML = `${ICON.check}<span>Tentar novamente</span>`; } }
+}
+
+// ANALISTA+: devolve um item da conferência ao auxiliar, com observação.
+function devolver(s){
+  const m = openModal(`
+    <div class="modal-head"><h3>Devolver ao auxiliar</h3>
+      <button class="modal-x" id="dv-x">${ICON.x}</button></div>
+    <p class="modal-sub">A solicitação volta para ajustes. Descreva o que precisa ser corrigido.</p>
+    <div class="field" style="margin-top:14px"><label>Observação</label>
+      <textarea class="textarea" id="dv-obs" placeholder="Ex.: número da nota divergente, anexar XML…"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary btn-block" id="dv-ok">Devolver com observação</button>
+      <button class="btn btn-outline btn-block" id="dv-no">Voltar</button>
+    </div>`);
+  m.querySelector('#dv-x').onclick = closeModal;
+  m.querySelector('#dv-no').onclick = closeModal;
+  m.querySelector('#dv-ok').onclick = async () => {
+    const observacao = m.querySelector('#dv-obs').value.trim();
+    if(!observacao) return toast('Escreva a observação para o auxiliar');
+    const b = m.querySelector('#dv-ok'); b.disabled=true; b.textContent='Devolvendo…';
+    try{
+      await api.devolverConferencia({ solicitacaoId:s.id, observacao, nome: CTX.profile.nome || null });
+      closeModal(); toast('Devolvido ao auxiliar'); CTX.status='aguardando_conferencia'; showFila();
+    }catch(e){ toast('Erro: '+e.message); b.disabled=false; b.textContent='Devolver com observação'; }
+  };
 }

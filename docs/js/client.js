@@ -145,7 +145,11 @@ const view = () => CTX.root.querySelector('#cli-view');
 async function showDashboard(){
   setActiveTab('dashboard');
   view().innerHTML = `<div class="cli-body"><div class="spinner" style="margin:60px auto"></div></div>`;
-  const solics = await api.listSolicitacoesCliente(CTX.cliente.id);
+  // Carrega solicitações e o contato de atendimento (item 5) em paralelo.
+  const [solics, contato] = await Promise.all([
+    api.listSolicitacoesCliente(CTX.cliente.id),
+    api.getConfigAtendimento().catch(()=>null)
+  ]);
 
   // Faturamento mensal = soma do valor das solicitações emitidas, por competência.
   const emitidas = solics.filter(s => s.status==='emitida');
@@ -191,6 +195,8 @@ async function showDashboard(){
       ${solics.length ? `<div class="qlist">${QHEAD}${solics.slice(0,12).map(rowQueue).join('')}</div>`
         : emptyState('file', 'Sua primeira nota começa aqui',
             'Você ainda não tem solicitações. Crie uma e a Maradel cuida da emissão.')}
+
+      ${ajudaCard(contato)}
     </div>`;
 
   view().querySelectorAll('[data-solic]').forEach(r =>
@@ -236,6 +242,25 @@ function renderChart(meses, porMes){
 function temRessalva(s){
   return !!s.tomador?.exige_numero_pedido && !String(s.numero_pedido||'').trim() && s.status!=='emitida' && s.status!=='cancelada';
 }
+// Status como o CLIENTE vê: o estado interno "aguardando conferência" não
+// vaza — para o cliente é apenas "Em emissão" (em andamento na Maradel).
+function statusCliente(st){ return st==='aguardando_conferencia' ? 'em_emissao' : st; }
+
+// Card "Precisa de ajuda?" com o contato de atendimento institucional (item 5).
+function ajudaCard(cfg){
+  if(!cfg || (!cfg.whatsapp && !cfg.email)) return '';
+  const nome = cfg.nome || 'a Maradel';
+  const wpp = cfg.whatsapp ? `https://wa.me/${String(cfg.whatsapp).replace(/\D/g,'')}` : '';
+  return `
+    <div class="card help-card">
+      <div class="help-h">${ICON.help}<span>Precisa de ajuda? Fale com <strong>${esc(nome)}</strong></span></div>
+      <div class="btn-row" style="margin-top:12px">
+        ${wpp?`<a class="btn btn-ghost" href="${esc(wpp)}" target="_blank" rel="noopener">${ICON.whatsapp}<span>WhatsApp</span></a>`:''}
+        ${cfg.email?`<a class="btn btn-outline" href="mailto:${esc(cfg.email)}">${ICON.mail}<span>E-mail</span></a>`:''}
+      </div>
+    </div>`;
+}
+
 // Data de atendimento: quando emitida, a data de emissão da nota; senão "—".
 function dataAtendimento(s){
   const nota = Array.isArray(s.nota) ? s.nota[0] : s.nota;
@@ -259,7 +284,7 @@ function rowQueue(s){
       <div class="q-date">${dAt}</div>
       <div class="q-end">
         <div class="q-val" style="${canceled?'color:var(--mist);text-decoration:line-through':''}">${brl(s.valor)}</div>
-        <div class="q-st">${temRessalva(s)?ressalvaPill():''}${badge(s.status)}</div>
+        <div class="q-st">${temRessalva(s)?ressalvaPill():''}${badge(statusCliente(s.status))}</div>
       </div>
     </div>`;
 }
@@ -421,7 +446,7 @@ async function showSolicitacao(id){
           <div class="fat-label">${emitida?'NFS-e nº':'Solicitação'}</div>
           <div style="font-size:24px;font-weight:700;color:var(--terracota);margin-top:3px">${emitida?esc(nota.numero||'—'):'#'+s.id.slice(0,8)}</div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ressalva?ressalvaPill():''}${badge(s.status)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${ressalva?ressalvaPill():''}${badge(statusCliente(s.status))}</div>
       </div>
       ${ressalva?`<div class="aviso-ressalva" style="margin-bottom:16px">${ICON.alert}<span>Falta o <strong>número de pedido</strong> exigido por este tomador. A Maradel só emite após o preenchimento.</span></div>`:''}
       ${podeResolverRessalva?`

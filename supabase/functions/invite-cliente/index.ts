@@ -52,10 +52,12 @@ Deno.serve(async (req) => {
     // cliente admin (service_role) — ignora RLS.
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
+    // Qualquer membro da equipe interna pode cadastrar clientes (não o cliente).
+    const STAFF = ["admin_master", "admin_operacional", "analista", "auxiliar"];
     const { data: prof } = await admin
       .from("profiles").select("role").eq("id", user.id).single();
-    if (prof?.role !== "analista") {
-      return json({ error: "Apenas analistas podem cadastrar clientes" }, 403);
+    if (!STAFF.includes(prof?.role)) {
+      return json({ error: "Apenas a equipe Maradel pode cadastrar clientes" }, 403);
     }
 
     // ---- 2. valida payload ----

@@ -146,8 +146,10 @@ async function routeBySession(session){
   loading('Entrando…');
   try{
     const profile = await api.getProfile();
-    if(profile.role === 'analista') await mountAnalista(root, profile);
-    else                            await mountCliente(root, profile);
+    // Qualquer papel interno (admin_master, admin_operacional, analista,
+    // auxiliar) usa o app da equipe; só 'cliente' usa o app do prestador.
+    if(profile.role === 'cliente') await mountCliente(root, profile);
+    else                           await mountAnalista(root, profile);
   }catch(e){
     // Profile pode levar 1 instante para ser criado pelo trigger; tenta de novo.
     console.error(e);

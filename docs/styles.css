@@ -60,6 +60,8 @@ button{font-family:inherit}
 .badge.solicitada .dot{background:var(--st-solic-dot)}
 .badge.em_emissao{background:var(--st-emiss-bg);color:var(--st-emiss-fg)}
 .badge.em_emissao .dot{background:var(--st-emiss-dot)}
+.badge.aguardando_conferencia{background:#EAF0F6;color:#3A5A7A}
+.badge.aguardando_conferencia .dot{background:#4F7CAC}
 .badge.emitida{background:var(--st-emit-bg);color:var(--st-emit-fg)}
 .badge.emitida .dot{background:var(--st-emit-dot)}
 .badge.cancelada{background:var(--st-canc-bg);color:var(--st-canc-fg)}
@@ -202,6 +204,27 @@ button{font-family:inherit}
 .tom-row{cursor:pointer;transition:background .12s ease}
 .tom-row:hover{background:#FBFAF9}
 .tom-go{color:var(--mist);width:18px;flex:none;display:flex}
+
+/* card "Precisa de ajuda?" (contato de atendimento) — visão do cliente */
+.help-card{margin-top:18px;padding:16px}
+.help-h{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--grafite)}
+.help-h svg{width:20px;height:20px;color:var(--terracota);flex:none}
+
+/* contador de conferência no menu lateral do analista */
+.an-side .nav .item .nav-cnt{margin-left:auto;background:var(--terracota);color:#fff;font-size:11px;
+  font-weight:700;min-width:18px;height:18px;border-radius:999px;display:inline-flex;align-items:center;
+  justify-content:center;padding:0 5px}
+.nav-cnt[hidden]{display:none}
+
+/* selo de papel (tela de equipe) */
+.role-pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:4px 10px;
+  border-radius:999px;background:var(--st-solic-bg);color:var(--chumbo);white-space:nowrap}
+
+/* botão de ícone destrutivo (remover usuário / excluir cliente) — só master */
+.icon-danger{background:none;border:none;cursor:pointer;color:var(--mist);width:28px;height:28px;
+  border-radius:7px;display:inline-flex;align-items:center;justify-content:center}
+.icon-danger svg{width:16px;height:16px}
+.icon-danger:hover{background:var(--st-canc-bg);color:var(--st-canc-fg)}
 
 /* barra de navegação inferior (mobile) — "Nova" virou item central (item 2) */
 .cli-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;
