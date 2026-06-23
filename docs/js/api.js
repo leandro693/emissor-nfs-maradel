@@ -38,6 +38,14 @@ export async function atualizarEmail(email){
   if(error) throw error;
 }
 
+// Atualiza o nome do contato no profile do usuário logado. A coluna
+// profiles.nome já existe; a RLS permite o próprio usuário se atualizar.
+export async function atualizarMeuNome(nome){
+  const uid = (await supabase.auth.getUser()).data.user.id;
+  const { error } = await supabase.from('profiles').update({ nome }).eq('id', uid);
+  if(error) throw error;
+}
+
 // Encerra a sessão.
 export async function signOut(){ return supabase.auth.signOut(); }
 

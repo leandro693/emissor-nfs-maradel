@@ -49,7 +49,7 @@ function renderShell(){
         <nav class="cli-side-nav">
           <button class="s-item s-nova" data-tab="nova" title="Nova solicitação">${ICON.plus}<span>Nova solicitação</span></button>
           <button class="s-item" data-tab="dashboard" title="Início">${ICON.home}<span>Início</span></button>
-          <button class="s-item" data-tab="solicitacoes" title="Solicitações">${ICON.list}<span>Solicitações</span></button>
+          <button class="s-item" data-tab="solicitacoes" title="Solicitações">${ICON.list}<span>Solicitações</span><span class="s-badges" id="sb-side" hidden></span></button>
           <button class="s-item" data-tab="tomadores" title="Tomadores">${ICON.users}<span>Tomadores</span></button>
           <button class="s-item" data-tab="conta" title="Conta">${ICON.user}<span>Conta</span></button>
         </nav>
@@ -66,13 +66,14 @@ function renderShell(){
           <h1 class="cli-title" id="cli-title">Início</h1>
           <div class="cli-profile">
             <div class="info"><div class="nm">${esc(nome)}</div><div class="rl">Prestador</div></div>
-            <button id="cli-logout" class="ava" title="Sair">${initials(nome)}</button>
+            <button id="cli-conta" class="ava" title="Minha conta">${initials(nome)}</button>
+            <button id="cli-logout" class="logout" title="Sair da conta">${ICON.logout}</button>
           </div>
         </header>
         <div id="cli-view"></div>
         <nav class="cli-nav">
           <button class="item" data-tab="dashboard">${ICON.home}<span>Início</span></button>
-          <button class="item" data-tab="solicitacoes">${ICON.list}<span>Solicitações</span></button>
+          <button class="item" data-tab="solicitacoes"><span class="nav-ic">${ICON.list}<span class="nb-bubble" id="sb-nav" hidden></span></span><span>Solicitações</span></button>
           <button class="item item-nova" data-tab="nova"><span class="navplus">${ICON.plus}</span><span>Nova</span></button>
           <button class="item" data-tab="tomadores">${ICON.users}<span>Tomadores</span></button>
           <button class="item" data-tab="conta">${ICON.user}<span>Conta</span></button>
@@ -80,10 +81,12 @@ function renderShell(){
       </div>
     </div>`;
 
-  // Sair (botão no cabeçalho e na sidebar).
+  // Sair (ícone de saída, no cabeçalho e na sidebar).
   const sair = async () => { await api.signOut(); location.reload(); };
   CTX.root.querySelector('#cli-logout').onclick = sair;
   CTX.root.querySelector('#cli-logout-side').onclick = sair;
+  // O avatar (iniciais) é identidade, não saída: leva à "Minha conta".
+  CTX.root.querySelector('#cli-conta').onclick = () => showMinhaConta();
 
   // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
   CTX.root.querySelector('#cli-toggle').onclick = () => {
@@ -115,6 +118,27 @@ function setHeader(title){
   const h = CTX.root.querySelector('#cli-title');
   if(h) h.textContent = title;
 }
+// Atualiza os contadores do módulo "Solicitações" nos menus (sidebar e barra).
+// aAtender (laranja): enviadas e aguardando o analista. comRessalva (vermelho):
+// faltando informação obrigatória — pendência do próprio cliente.
+function updateNavBadges(aAtender, comRessalva){
+  const side = CTX.root.querySelector('#sb-side');
+  if(side){
+    const parts = [];
+    if(aAtender>0)    parts.push(`<span class="nb nb-pend">(${aAtender})</span>`);
+    if(comRessalva>0) parts.push(`<span class="nb nb-alert">(${comRessalva})</span>`);
+    side.innerHTML = parts.join('');
+    side.hidden = parts.length===0;
+  }
+  const nav = CTX.root.querySelector('#sb-nav');
+  if(nav){
+    // Na barra (mobile) cabe uma bolha: prioriza a pendência do cliente (vermelha).
+    const n = comRessalva>0 ? comRessalva : aAtender;
+    nav.textContent = n>0 ? String(n) : '';
+    nav.className = 'nb-bubble ' + (comRessalva>0 ? 'alert' : 'pend');
+    nav.hidden = n===0;
+  }
+}
 const view = () => CTX.root.querySelector('#cli-view');
 
 // ---- DASHBOARD --------------------------------------------------------------
@@ -134,6 +158,9 @@ async function showDashboard(){
   // Notas com ressalva (faltando número de pedido obrigatório) — item 4.
   // Geram um card de alerta em destaque no topo do dashboard.
   const pendentes = solics.filter(temRessalva);
+  // Contadores do menu: a atender (laranja) e com ressalva (vermelho).
+  const aAtender = solics.filter(s => s.status==='solicitada' && !temRessalva(s)).length;
+  updateNavBadges(aAtender, pendentes.length);
 
   view().innerHTML = `
     <div class="cli-body">
@@ -229,9 +256,20 @@ async function showSolicitacoes(){
   setActiveTab('solicitacoes');
   view().innerHTML = `<div class="cli-body"><div class="spinner" style="margin:60px auto"></div></div>`;
   const solics = await api.listSolicitacoesCliente(CTX.cliente.id);
+  // Atualiza os contadores do menu e monta o resumo de pendências do topo.
+  const comRessalva = solics.filter(temRessalva).length;
+  const aAtender = solics.filter(s => s.status==='solicitada' && !temRessalva(s)).length;
+  updateNavBadges(aAtender, comRessalva);
+  const resumo = [
+    aAtender>0    ? `<span class="nb nb-pend">${aAtender} a atender</span>` : '',
+    comRessalva>0 ? `<span class="nb nb-alert">${comRessalva} com ressalva</span>` : ''
+  ].filter(Boolean).join('');
   view().innerHTML = `
-    <div class="subhead" style="position:static"><h2 style="margin-left:4px">Minhas solicitações</h2></div>
-    <div class="cli-body" style="padding-bottom:120px">
+    <div class="subhead" style="position:static">
+      <h2 style="margin-left:4px">Minhas solicitações</h2>
+      ${resumo?`<div class="solic-resumo">${resumo}</div>`:''}
+    </div>
+    <div class="cli-body">
       ${solics.length ? `<div class="solic-list">${solics.map(rowSolic).join('')}</div>`
         : emptyState('list','Nenhuma solicitação ainda','Toque em "Nova solicitação" e a Maradel cuida da emissão.')}
     </div>`;
@@ -462,8 +500,11 @@ async function showTomadores(){
   view().innerHTML = `<div class="cli-body"><div class="spinner" style="margin:60px auto"></div></div>`;
   const tomadores = await api.listTomadores(CTX.cliente.id);
   view().innerHTML = `
-    <div class="subhead" style="position:static"><h2 style="margin-left:4px">Meus tomadores</h2></div>
-    <div class="cli-body" style="padding-bottom:120px">
+    <div class="subhead" style="position:static">
+      <h2 style="margin-left:4px">Meus tomadores</h2>
+      <button class="btn-subtle" id="tm-novo" title="Cadastrar novo tomador">${ICON.plus}<span>Novo tomador</span></button>
+    </div>
+    <div class="cli-body">
       ${tomadores.length ? `<div class="solic-list">${tomadores.map(t=>`
         <div class="tom-row">
           <div class="ava ${t===tomadores[0]?'last':''}">${initials(t.nome)}</div>
@@ -473,9 +514,6 @@ async function showTomadores(){
           </div>
         </div>`).join('')}</div>`
         : emptyState('users','Nenhum tomador ainda','Cadastre quem recebe suas notas. Depois é só selecionar na nova solicitação.')}
-    </div>
-    <div class="cli-footbar" style="background:transparent;border-top:none;bottom:64px">
-      <button class="btn btn-ghost btn-block" id="tm-novo">${ICON.plus}<span>Novo tomador</span></button>
     </div>`;
   view().querySelector('#tm-novo').onclick = () => showNovoTomador();
 }
@@ -547,6 +585,13 @@ function showMinhaConta(){
     <div class="subhead" style="position:static"><h2 style="margin-left:4px">Minha conta</h2></div>
     <div class="cli-body" style="padding-bottom:40px">
       <div class="card" style="padding:18px 18px 4px;margin-bottom:18px">
+        <div class="cli-hello" style="margin-bottom:2px">Seus dados</div>
+        <div style="font-size:12.5px;color:var(--mist);margin-bottom:14px">Seu nome aparece na saudação do app e como remetente nas notas enviadas.</div>
+        <div class="field"><label>Seu nome</label>
+          <input class="input" id="mc-nome" value="${esc(CTX.profile.nome||'')}" placeholder="Ex.: João Silva"></div>
+        <button class="btn btn-outline btn-block" id="mc-nome-save" style="margin-bottom:18px">Salvar nome</button>
+      </div>
+      <div class="card" style="padding:18px 18px 4px;margin-bottom:18px">
         <div class="cli-hello" style="margin-bottom:2px">Empresa</div>
         <div style="font-size:16px;font-weight:600;margin-bottom:14px">${esc(CTX.cliente.razao_social)}</div>
         <div class="field"><label>E-mail de acesso</label>
@@ -572,6 +617,24 @@ function showMinhaConta(){
       </div>
       <button class="link-danger" id="mc-sair" style="display:block;margin:22px auto 0">Sair da conta</button>
     </div>`;
+
+  // Salvar o nome do contato (profile.nome) — personaliza a saudação e o app.
+  view().querySelector('#mc-nome-save').onclick = async () => {
+    const nome = view().querySelector('#mc-nome').value.trim();
+    const btn = view().querySelector('#mc-nome-save'); btn.disabled=true; btn.textContent='Salvando…';
+    try{
+      await api.atualizarMeuNome(nome || null);
+      CTX.profile.nome = nome || null;
+      // Atualiza as iniciais/nome exibidos no cabeçalho e na sidebar na hora.
+      const novasIniciais = initials(nome || CTX.cliente.razao_social);
+      CTX.root.querySelector('#cli-conta').textContent = novasIniciais;
+      CTX.root.querySelectorAll('.cli-profile .nm, .cli-side-user .nm').forEach(n =>
+        n.textContent = nome || CTX.cliente.razao_social);
+      const avaSide = CTX.root.querySelector('.cli-side-user .ava'); if(avaSide) avaSide.textContent = novasIniciais;
+      toast('Nome atualizado');
+    }catch(err){ toast('Erro: '+err.message); }
+    btn.disabled=false; btn.textContent='Salvar nome';
+  };
 
   // Atualizar e-mail (Supabase envia confirmação ao novo endereço).
   view().querySelector('#mc-email-save').onclick = async () => {
