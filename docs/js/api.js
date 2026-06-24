@@ -137,6 +137,53 @@ export async function excluirCliente(id){
   if(error) throw error;
 }
 
+// Busca um cliente (prestador) pelo id — usado na tela de detalhe do cliente
+// (lado equipe). RLS já libera a leitura para a equipe.
+export async function getCliente(id){
+  const { data, error } = await supabase.from('clientes').select('*').eq('id', id).single();
+  if(error) throw error;
+  return data;
+}
+
+// Busca um cliente pelo user_id — usado logo após o convite, para descobrir o
+// id do registro recém-criado e gravar o acesso à prefeitura.
+export async function getClienteByUserId(userId){
+  const { data, error } = await supabase.from('clientes').select('*').eq('user_id', userId).maybeSingle();
+  if(error) throw error;
+  return data;
+}
+
+// ---- ACESSO À PREFEITURA (Parte 3) — tabela só da equipe, senha cifrada ------
+
+// Lê os metadados de acesso à prefeitura de um cliente (link, login, se há
+// senha e o indicador de procuração). NÃO traz a senha em claro. RPC restrito
+// à equipe (is_staff). Retorna null quando não há nada cadastrado.
+export async function getClientePrefeitura(clienteId){
+  const { data, error } = await supabase.rpc('get_cliente_prefeitura', { p_cliente_id: clienteId });
+  if(error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : (data || null);
+}
+
+// Devolve a SENHA em claro — só para analista ou superior (RPC valida o papel).
+export async function getClientePrefeituraSenha(clienteId){
+  const { data, error } = await supabase.rpc('get_cliente_prefeitura_senha', { p_cliente_id: clienteId });
+  if(error) throw error;
+  return data; // texto (ou null se não cadastrada)
+}
+
+// Grava/atualiza o acesso à prefeitura — só admin (RPC valida e criptografa a
+// senha). senha: undefined/null = manter a atual; '' = remover; texto = trocar.
+export async function setClientePrefeitura(clienteId, { link, login, senha, procuracao }){
+  const { error } = await supabase.rpc('set_cliente_prefeitura', {
+    p_cliente_id: clienteId,
+    p_link: link ?? null,
+    p_login: login ?? null,
+    p_senha: senha === undefined ? null : senha,
+    p_procuracao: !!procuracao,
+  });
+  if(error) throw error;
+}
+
 // Atualiza dados editáveis do próprio cliente (prestador) — ex.: telefone
 // (WhatsApp) e link de grupo, usados no envio da nota. RLS garante que o
 // cliente só altere o próprio registro.

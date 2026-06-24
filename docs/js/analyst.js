@@ -7,7 +7,7 @@ import {
   ICON, brl, fmtCompetencia, fmtCompetenciaShort, fmtDate, fmtDateTime, relTime, initials, badge,
   esc, toast, copyToClipboard, maskDocInput, openEnvioEmail, openEnvioWhatsApp,
   ressalvaPill, statusTag, notaPublicUrl, linkPublicoCard, bindLinkPublico, STATUS_LABEL,
-  roleLabel, openModal, closeModal
+  roleLabel, openModal, closeModal, toggle, bindToggle, isToggleOn
 } from './ui.js';
 
 let CTX = { profile:null, root:null, status:'solicitada', busca:'' };
@@ -33,21 +33,39 @@ const main = () => CTX.root.querySelector('#an-main');
 function renderShell(){
   // Cabeçalho mostra o NOME REAL e o PAPEL do usuário logado (item 3).
   const nome = CTX.profile.nome || 'Equipe Maradel';
-  // Menu conforme o papel: Conferência (analista+), Equipe (master),
-  // Configurações (admin). Fila/Notas/Clientes para toda a equipe.
-  const navItems = [
-    `<button class="item active" data-nav="fila">${ICON.list}<span>Fila</span></button>`,
-    pode.conferir() ? `<button class="item" data-nav="conferencia">${ICON.check}<span>Conferência</span><span class="nav-cnt" id="nav-conf" hidden></span></button>` : '',
-    `<button class="item" data-nav="notas">${ICON.file}<span>Notas emitidas</span></button>`,
-    `<button class="item" data-nav="clientes">${ICON.users}<span>Clientes</span></button>`,
-    pode.master() ? `<button class="item" data-nav="equipe">${ICON.user}<span>Equipe</span></button>` : '',
-    pode.admin()  ? `<button class="item" data-nav="config">${ICON.settings}<span>Configurações</span></button>` : '',
+  // Preferência de sidebar retraída persiste entre sessões (item 4, paridade com o cliente).
+  const collapsed = localStorage.getItem('an_side_collapsed') === '1';
+  // Menu organizado em GRUPOS com rótulo e separador (item 2 — "itens soltos"):
+  //   OPERAÇÃO (Fila/Conferência/Notas) · CADASTROS (Clientes) · GESTÃO (Equipe/Config).
+  const item = (nav, ico, label, extra='') =>
+    `<button class="item${nav==='fila'?' active':''}" data-nav="${nav}">${ico}<span>${label}</span>${extra}</button>`;
+  const grupoOperacao = [
+    item('fila', ICON.list, 'Fila'),
+    pode.conferir() ? item('conferencia', ICON.check, 'Conferência', `<span class="nav-cnt" id="nav-conf" hidden></span>`) : '',
+    item('notas', ICON.file, 'Notas emitidas'),
   ].filter(Boolean).join('');
+  const grupoCadastros = item('clientes', ICON.users, 'Clientes');
+  const grupoGestao = [
+    pode.master() ? item('equipe', ICON.user, 'Equipe') : '',
+    pode.admin()  ? item('config', ICON.settings, 'Configurações') : '',
+  ].filter(Boolean);
+
+  const nav = `
+    <div class="nav-label">Operação</div>
+    ${grupoOperacao}
+    <div class="nav-sep"></div>
+    <div class="nav-label">Cadastros</div>
+    ${grupoCadastros}
+    ${grupoGestao.length ? `<div class="nav-sep"></div><div class="nav-label">Gestão</div>${grupoGestao.join('')}` : ''}`;
+
   CTX.root.innerHTML = `
-    <div class="an">
+    <div class="an" data-collapsed="${collapsed?'true':'false'}">
       <aside class="an-side">
-        <div class="brand"><img src="assets/logo-horizontal-white.png" alt="Maradel"></div>
-        <nav class="nav">${navItems}</nav>
+        <div class="brand">
+          <img src="assets/logo-horizontal-white.png" alt="Maradel">
+          <button class="brand-toggle" id="an-toggle" title="Retrair/expandir menu">${ICON.menu}</button>
+        </div>
+        <nav class="nav">${nav}</nav>
         <div class="user">
           <div class="ava">${initials(nome)}</div>
           <div style="min-width:0"><div class="nm">${esc(nome)}</div><div class="rl">${roleLabel(CTX.profile.role)}</div></div>
@@ -57,6 +75,13 @@ function renderShell(){
       <div class="an-main" id="an-main"></div>
     </div>`;
   CTX.root.querySelector('#an-logout').onclick = async () => { await api.signOut(); location.reload(); };
+  // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
+  CTX.root.querySelector('#an-toggle').onclick = () => {
+    const an = CTX.root.querySelector('.an');
+    const on = an.dataset.collapsed !== 'true';
+    an.dataset.collapsed = on ? 'true' : 'false';
+    localStorage.setItem('an_side_collapsed', on ? '1' : '0');
+  };
   // Navegação lateral.
   CTX.root.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => {
     const n = b.dataset.nav;
@@ -102,7 +127,7 @@ async function showFila(){
           <h1>${titulo}</h1>
           <div class="day">${hoje.charAt(0).toUpperCase()+hoje.slice(1)} · ${day}</div>
         </div>
-        <div class="an-search">${ICON.search}<input id="an-busca" placeholder="Buscar cliente ou CNPJ…" value="${esc(CTX.busca)}"></div>
+        <div class="an-search">${ICON.search}<input id="an-busca" placeholder="Buscar cliente, tomador ou CNPJ…" value="${esc(CTX.busca)}"></div>
       </div>
       <div class="an-tabs">
         ${tab('solicitada', cont.solicitada)}
@@ -114,7 +139,7 @@ async function showFila(){
     </div>
     <div class="an-content">
       ${rows.length ? `
-        <div class="tbl-head"><span>Cliente</span><span>Tomador</span><span>Serviço</span><span>Competência</span><span style="text-align:right">Valor</span><span style="text-align:right">Status</span></div>
+        <div class="tbl-head"><span>Cliente (prestador)</span><span>Tomador (recebe)</span><span>Serviço</span><span>Competência</span><span style="text-align:right">Valor</span><span style="text-align:right">Status</span></div>
         <div class="tbl">${rows.map(filaRow).join('')}</div>`
        : filaEmpty(CTX.status)}
     </div>`;
@@ -178,15 +203,15 @@ async function showClientes(){
   main().innerHTML = `
     <div class="an-head">
       <div class="row1">
-        <div><h1>Clientes</h1><div class="day">${clientes.length} prestador(es) cadastrado(s)</div></div>
+        <div><h1>Clientes <span style="font-size:13px;font-weight:500;color:var(--mist)">· prestadores</span></h1><div class="day">${clientes.length} prestador(es) cadastrado(s)</div></div>
         <button class="btn btn-primary btn-sm" id="cl-novo">${ICON.plus}<span>Novo cliente</span></button>
       </div>
     </div>
     <div class="an-content">
       ${clientes.length ? `
-        <div class="tbl-head" style="grid-template-columns:${cols}"><span>Razão social</span><span>CNPJ</span><span>Regime</span><span>E-mail</span>${master?'<span></span>':''}</div>
+        <div class="tbl-head" style="grid-template-columns:${cols}"><span>Razão social (prestador)</span><span>CNPJ</span><span>Regime</span><span>E-mail</span>${master?'<span></span>':''}</div>
         <div class="tbl">${clientes.map(c=>`
-          <div class="tbl-row" style="grid-template-columns:${cols};cursor:default">
+          <div class="tbl-row" style="grid-template-columns:${cols}" data-open-cli="${c.id}">
             <div class="cli-nm">${esc(c.razao_social)}</div>
             <div class="tom">${esc(c.cnpj)}</div>
             <div class="svc">${esc(c.regime||'—')}</div>
@@ -197,12 +222,161 @@ async function showClientes(){
             <h3>Nenhum cliente ainda</h3><p>Cadastre o primeiro prestador. Ele recebe um convite por e-mail para definir a senha.</p></div>`}
     </div>`;
   main().querySelector('#cl-novo').onclick = showNovoCliente;
+  // Linha do cliente → abre o detalhe (dados + acesso à prefeitura).
+  main().querySelectorAll('[data-open-cli]').forEach(r => r.onclick = () => showClienteDetalhe(r.dataset.openCli));
   // Exclusão de cliente é exclusiva do master (item 1) — RLS também bloqueia.
-  main().querySelectorAll('[data-del-cli]').forEach(b => b.onclick = async () => {
+  main().querySelectorAll('[data-del-cli]').forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();  // não abrir o detalhe ao clicar em excluir
     if(!confirm(`Excluir o cliente "${b.dataset.nm}"? Esta ação remove o cadastro e não pode ser desfeita.`)) return;
     try{ await api.excluirCliente(b.dataset.delCli); toast('Cliente excluído'); showClientes(); }
     catch(e){ toast('Erro: '+e.message); }
   });
+}
+
+// ---- DETALHE DO CLIENTE (lado equipe) — dados + ACESSO À PREFEITURA ---------
+// Admin (master/operacional) edita o acesso; analista vê a senha; auxiliar vê
+// link/login mas não a senha. A senha trafega só sob demanda (RPC).
+async function showClienteDetalhe(id){
+  setNav('clientes');
+  main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
+  const [c, pref] = await Promise.all([
+    api.getCliente(id),
+    api.getClientePrefeitura(id).catch(()=>null),
+  ]);
+  const isAdmin = pode.admin();
+  main().innerHTML = `
+    <div class="det">
+      <div class="det-head">
+        <button class="back" id="cd-back">${ICON.back}</button>
+        <div>
+          <h1>${esc(c.razao_social)}</h1>
+          <div class="sub" style="font-size:12.5px;color:var(--mist);margin-top:2px">Prestador · CNPJ ${esc(c.cnpj||'—')}</div>
+        </div>
+      </div>
+      <div class="an-content" style="max-width:640px">
+        <div class="cap">Dados do prestador</div>
+        <div class="card" style="padding:2px 16px;margin-bottom:24px">
+          <div class="kv"><span class="k">Razão social</span><span class="v">${esc(c.razao_social)}</span></div>
+          <div class="kv"><span class="k">CNPJ</span><span class="v">${esc(c.cnpj||'—')}</span></div>
+          <div class="kv"><span class="k">Regime</span><span class="v">${esc(c.regime||'—')}</span></div>
+          <div class="kv"><span class="k">E-mail</span><span class="v">${esc(c.email||'—')}</span></div>
+          <div class="kv"><span class="k">Endereço</span><span class="v">${esc(c.endereco||'—')}</span></div>
+          <div class="kv"><span class="k">Telefone</span><span class="v">${esc(c.telefone||'—')}</span></div>
+        </div>
+        <div id="cd-pref"></div>
+      </div>
+    </div>`;
+  main().querySelector('#cd-back').onclick = showClientes;
+  // Seção de acesso à prefeitura: formulário (admin) ou somente leitura.
+  const box = main().querySelector('#cd-pref');
+  if(isAdmin) renderPrefeituraForm(box, id, pref);
+  else        renderPrefeituraReadonly(box, id, pref, pode.conferir());
+}
+
+// Garante esquema https:// no link da prefeitura (evita abrir relativo).
+function prefUrl(u){ u = String(u||'').trim(); return /^https?:\/\//i.test(u) ? u : 'https://'+u; }
+
+// Formulário de acesso à prefeitura (admin master/operacional). Os campos de
+// link/login/senha ficam SEMPRE visíveis; "emissão por procuração?" é só um
+// indicador para o analista saber qual acesso usar (escritório x cliente).
+function renderPrefeituraForm(box, clienteId, pref){
+  const temSenha = !!pref?.tem_senha;
+  box.innerHTML = `
+    <div class="cap">Acesso à prefeitura <span style="text-transform:none;letter-spacing:0;color:var(--mist);font-weight:500">· editável por admin</span></div>
+    <div class="card" style="padding:18px 18px 6px">
+      <div class="field"><label>Link da prefeitura / portal de emissão</label>
+        <input class="input" id="pf-link" value="${esc(pref?.link||'')}" placeholder="https://nfse.prefeitura.gov.br/..."></div>
+      <div class="field"><label>Login / código de acesso</label>
+        <input class="input" id="pf-login" value="${esc(pref?.login||'')}" placeholder="Usuário ou código de acesso"></div>
+      <div class="field"><label>Senha da prefeitura</label>
+        <input class="input" id="pf-senha" type="password" autocomplete="new-password" placeholder="${temSenha?'•••••••• (deixe em branco para manter)':'Defina a senha de acesso'}">
+        <div style="font-size:12px;color:var(--mist);margin-top:6px">Guardada criptografada. Visível apenas para analista ou superior.${temSenha?' Em branco mantém a senha atual.':''}</div>
+      </div>
+      <div class="field">
+        <label>Emissão por procuração?</label>
+        ${toggle('pf-proc', 'Sim — a Maradel emite com o acesso do escritório', !!pref?.emissao_procuracao)}
+        <div style="font-size:12px;color:var(--mist);margin-top:8px">Apenas informativo: indica ao analista qual acesso usar (escritório x cliente). Não altera os campos acima.</div>
+      </div>
+      <button class="btn btn-primary btn-block" id="pf-save" style="margin-bottom:18px">Salvar acesso</button>
+    </div>`;
+  bindToggle(box, 'pf-proc');
+  box.querySelector('#pf-save').onclick = async () => {
+    const link = box.querySelector('#pf-link').value.trim();
+    const login = box.querySelector('#pf-login').value.trim();
+    const senhaRaw = box.querySelector('#pf-senha').value;
+    const procuracao = isToggleOn(box, 'pf-proc');
+    // senha vazia => manter a atual (undefined); preenchida => trocar.
+    const senha = senhaRaw ? senhaRaw : undefined;
+    const btn = box.querySelector('#pf-save'); btn.disabled=true; btn.textContent='Salvando…';
+    try{
+      await api.setClientePrefeitura(clienteId, { link, login, senha, procuracao });
+      toast('Acesso à prefeitura salvo');
+      const novo = await api.getClientePrefeitura(clienteId).catch(()=>null);
+      renderPrefeituraForm(box, clienteId, novo);
+    }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.textContent='Salvar acesso'; }
+  };
+}
+
+// Acesso à prefeitura SOMENTE LEITURA (analista/auxiliar): link clicável, login
+// para copiar e senha (revelar/copiar) só para analista+. Reutilizado também na
+// tela de emissão. Devolve '' quando não há nada cadastrado.
+function prefeituraAccessHTML(pref, canSeeSenha){
+  if(!pref || (!pref.link && !pref.login && !pref.tem_senha && !pref.emissao_procuracao)) return '';
+  const linkRow = pref.link ? `
+    <div class="copyfield">
+      <div style="min-width:0">
+        <div class="cf-k">Portal da prefeitura</div>
+        <div class="cf-v" style="font-size:13.5px;word-break:break-all">${esc(pref.link)}</div>
+      </div>
+      <div style="display:flex;gap:7px;flex:none">
+        <a class="copy-btn" href="${esc(prefUrl(pref.link))}" target="_blank" rel="noopener">${ICON.link}<span>Abrir</span></a>
+        <button class="copy-btn" data-copy="${esc(pref.link)}">${ICON.copy}<span>Copiar</span></button>
+      </div>
+    </div>` : '';
+  const loginRow = pref.login ? copyRow('Login / código de acesso', esc(pref.login), pref.login) : '';
+  const senhaRow = pref.tem_senha
+    ? (canSeeSenha
+        ? `<div class="copyfield" id="pref-senha-field">
+             <div style="min-width:0">
+               <div class="cf-k">Senha da prefeitura</div>
+               <div class="cf-v" id="pref-senha-val" style="font-size:15px;letter-spacing:3px">••••••••</div>
+             </div>
+             <div style="display:flex;gap:7px;flex:none">
+               <button class="copy-btn" id="pref-senha-show">${ICON.eye}<span>Mostrar</span></button>
+               <button class="copy-btn hidden" id="pref-senha-copy">${ICON.copy}<span>Copiar</span></button>
+             </div>
+           </div>`
+        : `<div class="aviso-ressalva">${ICON.lock}<span>Senha cadastrada — visível apenas para analista ou superior.</span></div>`)
+    : '';
+  const proc = `<div class="det-info-pill">${ICON.info}<span>Emissão por procuração: <strong>${pref.emissao_procuracao?'Sim — usar acesso do escritório':'Não — usar acesso do cliente'}</strong> <em>(informativo)</em></span></div>`;
+  return `${linkRow}${loginRow}${senhaRow}${proc}`;
+}
+
+// Liga os botões de copiar/abrir e o "Mostrar senha" (busca a senha sob demanda).
+function bindPrefeituraAccess(scope, clienteId){
+  scope.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copyToClipboard(b.dataset.copy, b));
+  const show = scope.querySelector('#pref-senha-show');
+  if(show) show.onclick = async () => {
+    show.disabled = true; show.innerHTML = '…';
+    try{
+      const senha = await api.getClientePrefeituraSenha(clienteId);
+      const val = scope.querySelector('#pref-senha-val');
+      val.textContent = senha || '—'; val.style.letterSpacing = '0';
+      const copy = scope.querySelector('#pref-senha-copy');
+      copy.classList.remove('hidden');
+      copy.onclick = () => copyToClipboard(senha || '', copy);
+      show.classList.add('hidden');
+    }catch(e){ toast('Erro: '+e.message); show.disabled=false; show.innerHTML = `${ICON.eye}<span>Mostrar</span>`; }
+  };
+}
+
+// Renderiza o acesso somente-leitura dentro de uma seção (tela de detalhe do cliente).
+function renderPrefeituraReadonly(box, clienteId, pref, canSeeSenha){
+  const inner = prefeituraAccessHTML(pref, canSeeSenha);
+  box.innerHTML = `
+    <div class="cap">Acesso à prefeitura</div>
+    ${inner || `<div class="card" style="padding:14px 16px;font-size:13px;color:var(--taupe)">Nenhum dado de acesso cadastrado. Peça a um administrador para incluir.</div>`}`;
+  if(inner) bindPrefeituraAccess(box, clienteId);
 }
 
 // Formulário de cadastro completo do cliente. Ao salvar, dispara o convite
@@ -226,9 +400,19 @@ function showNovoCliente(){
         <div class="field"><label>Telefone (WhatsApp) <span style="text-transform:none;letter-spacing:0;color:var(--mist)">opcional</span></label><input class="input" id="nc-tel" inputmode="tel" placeholder="(11) 99999-8888"></div>
         <div class="field"><label>Link do grupo do WhatsApp <span style="text-transform:none;letter-spacing:0;color:var(--mist)">opcional</span></label><input class="input" id="nc-grupo" placeholder="https://chat.whatsapp.com/..."></div>
       </div>
+      ${pode.admin() ? `
+      <div class="cap" style="margin-top:14px">Acesso à prefeitura <span style="text-transform:none;letter-spacing:0;color:var(--mist);font-weight:500">· opcional, pode ser preenchido depois</span></div>
+      <div class="field"><label>Link da prefeitura / portal de emissão</label><input class="input" id="nc-pf-link" placeholder="https://nfse.prefeitura.gov.br/..."></div>
+      <div class="form-grid">
+        <div class="field"><label>Login / código de acesso</label><input class="input" id="nc-pf-login" placeholder="Usuário ou código"></div>
+        <div class="field"><label>Senha da prefeitura</label><input class="input" id="nc-pf-senha" type="password" autocomplete="new-password" placeholder="Guardada criptografada"></div>
+      </div>
+      <div class="field">${toggle('nc-pf-proc', 'Emissão por procuração? (usar acesso do escritório)', false)}</div>
+      ` : ''}
       <button class="btn btn-primary btn-block" id="nc-save" style="margin-top:8px">${ICON.send}<span>Salvar e enviar convite</span></button>
     </div>`;
   maskDocInput(main().querySelector('#nc-cnpj'));
+  if(pode.admin()) bindToggle(main(), 'nc-pf-proc');
   main().querySelector('#nc-back').onclick = showClientes;
   main().querySelector('#nc-save').onclick = async () => {
     const g = id => main().querySelector(id).value.trim();
@@ -237,8 +421,19 @@ function showNovoCliente(){
     if(!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return toast('Informe um e-mail válido');
     const btn = main().querySelector('#nc-save'); btn.disabled=true; btn.innerHTML='Enviando convite…';
     try{
-      await api.convidarCliente({ razao_social, cnpj, regime:g('#nc-regime'), endereco:g('#nc-end'), email,
+      const res = await api.convidarCliente({ razao_social, cnpj, regime:g('#nc-regime'), endereco:g('#nc-end'), email,
         telefone:g('#nc-tel')||null, whatsapp_grupo:g('#nc-grupo')||null });
+      // Acesso à prefeitura (admin): grava após o convite, já com o cliente criado.
+      if(pode.admin()){
+        const link = g('#nc-pf-link'), login = g('#nc-pf-login'), senha = main().querySelector('#nc-pf-senha').value;
+        const proc = isToggleOn(main(), 'nc-pf-proc');
+        if(link || login || senha || proc){
+          try{
+            const cli = res?.user_id ? await api.getClienteByUserId(res.user_id) : null;
+            if(cli) await api.setClientePrefeitura(cli.id, { link, login, senha: senha || undefined, procuracao: proc });
+          }catch(e){ toast('Cliente criado, mas o acesso à prefeitura falhou: '+e.message); }
+        }
+      }
       toast('Cliente cadastrado e convite enviado'); showClientes();
     }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.innerHTML=`${ICON.send}<span>Salvar e enviar convite</span>`; }
   };
@@ -359,6 +554,9 @@ async function showDetalhe(id){
   const nota = Array.isArray(s.nota) ? s.nota[0] : s.nota;
   const doc = s.tomador?.doc || '—';
   const emitida = s.status==='emitida' && nota;
+  // Acesso à prefeitura do prestador — exibido de forma prática para o analista
+  // já abrir o portal com o acesso em mãos (Parte 3).
+  const pref = await api.getClientePrefeitura(s.cliente_id).catch(()=>null);
 
   // Bloqueio do número de pedido (item B): se o tomador exige e está vazio,
   // a emissão fica travada. O <input> abaixo destrava ao preencher; o banco
@@ -413,8 +611,9 @@ async function showDetalhe(id){
           ${s.recorrente?`<div class="det-info-pill">${ICON.refresh}<span>Recorrente${s.recorrencia_meses?` · ${esc(s.recorrencia_meses)} meses`:''} <em>(informativo)</em></span></div>`:''}
           <div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:12px 16px;background:#fff;border:1px dashed rgba(57,57,59,.18);border-radius:10px">
             <span style="color:var(--taupe);width:16px">${ICON.users}</span>
-            <span style="font-size:12.5px;color:var(--taupe)">Prestador: <strong style="color:var(--chumbo)">${esc(s.cliente?.razao_social||'—')}</strong> · CNPJ ${esc(s.cliente?.cnpj||'—')}</span>
+            <span style="font-size:12.5px;color:var(--taupe)">Prestador (cliente): <strong style="color:var(--chumbo)">${esc(s.cliente?.razao_social||'—')}</strong> · CNPJ ${esc(s.cliente?.cnpj||'—')}</span>
           </div>
+          <div id="dt-pref" style="margin-top:18px"></div>
           <div id="dt-interno" style="margin-top:18px"></div>
           <div id="dt-historico" style="margin-top:18px"></div>
         </div>
@@ -508,6 +707,19 @@ async function showDetalhe(id){
 
   const c = main().querySelector('#dt-cancel');
   if(c) c.onclick = async () => { await api.setStatus(s.id,'cancelada'); toast('Solicitação cancelada'); showFila(); };
+
+  // acesso à prefeitura (link clicável + login/senha para copiar) — Parte 3
+  const prefBox = main().querySelector('#dt-pref');
+  if(prefBox){
+    const prefHTML = prefeituraAccessHTML(pref, pode.conferir());
+    if(prefHTML){
+      prefBox.innerHTML = `<div class="cap" style="margin-bottom:8px">Acesso à prefeitura · para emitir</div>${prefHTML}`;
+      bindPrefeituraAccess(prefBox, s.cliente_id);
+    } else if(pode.admin()){
+      prefBox.innerHTML = `<div class="cap" style="margin-bottom:8px">Acesso à prefeitura</div>
+        <div style="font-size:12.5px;color:var(--mist)">Sem dados de acesso cadastrados. Inclua em <strong>Clientes › ${esc(s.cliente?.razao_social||'')}</strong>.</div>`;
+    }
+  }
 
   // controle interno (quem preparou/conferiu) — só a equipe vê (item 4)
   carregarInterno(s.id);

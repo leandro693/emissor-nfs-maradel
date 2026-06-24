@@ -48,13 +48,31 @@ No painel do projeto, abra **SQL Editor** e rode, **em ordem**, todo o conteúdo
 1. `supabase/migrations/0001_init.sql`
 2. `supabase/migrations/0002_auth_senha_email.sql`
 3. `supabase/migrations/0003_pedido_recorrencia_link_publico.sql`
+4. `supabase/migrations/0004_motivo_cancelamento.sql`
+5. `supabase/migrations/0005_papeis_status_enums.sql` — **rode sozinha** (adiciona
+   valores de enum; o Postgres não deixa usá-los na mesma transação)
+6. `supabase/migrations/0006_permissoes_conferencia_equipe_contato.sql`
+7. `supabase/migrations/0007_acesso_prefeitura.sql`
 
 Isso cria tabelas, enums, RLS, triggers, a função de auth e o bucket `notas`,
 adiciona os campos de endereço/e-mail e, na 0003, adiciona: número de pedido +
 bloqueio real de emissão, recorrência (informativa), token público das notas
 (expira em 90 dias), telefone/grupo de WhatsApp do cliente e a tabela de
-histórico `nota_eventos`. As migrações são **aditivas e idempotentes** — rodar
-a 0003 num banco já existente não apaga nada.
+histórico `nota_eventos`. A 0005/0006 trazem a hierarquia de papéis, o fluxo de
+conferência e o contato de atendimento. A **0007** adiciona o **acesso à
+prefeitura** por cliente (link, login e senha **criptografada**, mais o
+indicador "emissão por procuração?"), numa tabela só da equipe. As migrações são
+**aditivas e idempotentes** — rodar de novo num banco já existente não apaga nada.
+
+> **Passo manual da 0007 (uma vez):** defina a chave de criptografia simétrica da
+> senha da prefeitura. No **SQL Editor**, gere uma chave e configure-a no banco:
+> ```sql
+> select encode(gen_random_bytes(32), 'base64');   -- copie o resultado
+> alter database postgres set app.prefeitura_key = 'COLE-A-CHAVE-AQUI';
+> ```
+> Depois **reconecte a sessão** (a configuração vale para novas conexões). Sem a
+> chave, link e login funcionam normalmente; salvar/ler **senha** falha com aviso
+> claro. Guarde a chave — trocá-la torna as senhas já gravadas ilegíveis.
 
 ### 2.2 Autenticação (e-mail + senha)
 - Em **Authentication → Providers → Email**: mantenha **Email** habilitado e

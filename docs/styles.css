@@ -291,14 +291,28 @@ button{font-family:inherit}
    APP ANALISTA (desktop)
    ============================================================ */
 .an{display:flex;min-height:100vh}
-.an-side{width:228px;background:var(--grafite-top);flex:none;display:flex;flex-direction:column;padding:26px 0;position:sticky;top:0;height:100vh}
-.an-side .brand{padding:0 24px 28px}
+.an-side{width:228px;background:var(--grafite-top);flex:none;display:flex;flex-direction:column;padding:22px 0;
+  position:sticky;top:0;height:100vh;transition:width .18s ease}
+/* cabeçalho da sidebar: logo + botão de retrair/expandir (item 4) */
+.an-side .brand{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 18px 22px}
 .an-side .brand img{height:28px}
-.an-side .nav{padding:0 14px;display:flex;flex-direction:column;gap:3px}
-.an-side .nav .item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:8px;
-  color:rgba(255,255,255,.55);font-size:14px;font-weight:500;cursor:pointer;background:none;border:none;text-align:left;width:100%}
+.an-side .brand-toggle{background:none;border:none;color:rgba(255,255,255,.6);cursor:pointer;
+  width:26px;height:26px;flex:none;display:flex;align-items:center;justify-content:center;border-radius:7px}
+.an-side .brand-toggle svg{width:20px;height:20px}
+.an-side .brand-toggle:hover{background:rgba(255,255,255,.08);color:#fff}
+.an-side .nav{padding:0 12px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.an-side .nav .item{display:flex;align-items:center;gap:12px;padding:10px 13px;border-radius:9px;
+  color:rgba(255,255,255,.6);font-size:14px;font-weight:500;cursor:pointer;background:none;border:none;
+  text-align:left;width:100%;white-space:nowrap;overflow:hidden}
+/* ÍCONES no tamanho certo (item 1) — antes herdavam o tamanho padrão do SVG (gigantes) */
+.an-side .nav .item svg{width:20px;height:20px;flex:none}
+.an-side .nav .item:hover{background:rgba(255,255,255,.06);color:#fff}
 .an-side .nav .item.active{background:rgba(219,132,56,.16);color:#fff;font-weight:600}
 .an-side .nav .item.active svg{stroke:var(--terracota)}
+/* organização dos módulos (item 2): rótulo de grupo + separador entre blocos */
+.an-side .nav-label{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(255,255,255,.32);padding:14px 14px 6px;white-space:nowrap;overflow:hidden}
+.an-side .nav-sep{height:1px;background:rgba(255,255,255,.09);margin:8px 14px}
 .an-side .user{margin-top:auto;padding:11px 28px;border-top:1px solid rgba(255,255,255,.08);
   display:flex;align-items:center;gap:11px}
 .an-side .user .ava{width:32px;height:32px;border-radius:50%;background:var(--chumbo);color:#fff;
@@ -311,9 +325,28 @@ button{font-family:inherit}
 .an-head .row1{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px}
 .an-head h1{font-size:24px;font-weight:600;letter-spacing:-.01em}
 .an-head .day{font-size:13.5px;color:var(--taupe);margin-top:3px}
-.an-search{display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--line-2);
-  border-radius:8px;padding:9px 13px;width:280px}
+.an-search{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--line-2);
+  border-radius:8px;padding:8px 12px;width:260px}
+/* lupa no tamanho certo (item 3) — antes herdava o tamanho padrão do SVG (gigante) */
+.an-search svg{width:17px;height:17px;flex:none;color:var(--mist)}
 .an-search input{border:none;background:none;outline:none;font-family:inherit;font-size:13.5px;width:100%;color:var(--grafite)}
+
+/* ---- sidebar do escritório retraída: só ícones (item 4) ---- */
+@media(min-width:721px){
+  .an[data-collapsed="true"] .an-side{width:74px}
+  .an[data-collapsed="true"] .an-side .brand img,
+  .an[data-collapsed="true"] .an-side .nav .item span:not(.nav-cnt),
+  .an[data-collapsed="true"] .an-side .nav-label,
+  .an[data-collapsed="true"] .an-side .user > div:not(.ava),
+  .an[data-collapsed="true"] .an-side .user #an-logout{display:none}
+  .an[data-collapsed="true"] .an-side .brand{justify-content:center;padding:0 0 22px}
+  .an[data-collapsed="true"] .an-side .nav .item{justify-content:center;padding:10px 0}
+  .an[data-collapsed="true"] .an-side .nav-sep{margin:8px 16px}
+  .an[data-collapsed="true"] .an-side .user{justify-content:center;padding:11px 0}
+  /* a bolha de conferência fica fora do fluxo quando recolhida (some o label) */
+  .an[data-collapsed="true"] .an-side .nav .item .nav-cnt{position:absolute;top:4px;right:10px;margin:0}
+  .an[data-collapsed="true"] .an-side .nav .item{position:relative}
+}
 .an-tabs{display:flex;align-items:center;gap:4px}
 .an-tab{display:flex;align-items:center;gap:8px;padding:11px 16px;border-bottom:2px solid transparent;
   color:var(--taupe);cursor:pointer;background:none;border-top:none;border-left:none;border-right:none;
@@ -393,9 +426,12 @@ button{font-family:inherit}
 /* responsivo: analista em telas estreitas */
 @media(max-width:720px){
   .an{flex-direction:column}
-  .an-side{width:100%;height:auto;flex-direction:row;position:static;padding:12px;overflow-x:auto;align-items:center}
+  .an-side{width:100%!important;height:auto;flex-direction:row;position:static;padding:12px;overflow-x:auto;align-items:center}
   .an-side .brand{padding:0 12px 0 4px}
-  .an-side .nav{flex-direction:row;padding:0}
+  .an-side .brand-toggle{display:none}            /* retrair só faz sentido no desktop */
+  .an-side .nav{flex-direction:row;padding:0;gap:2px}
+  .an-side .nav-label,.an-side .nav-sep{display:none}  /* sem rótulos/divisórias na barra horizontal */
+  .an-side .nav .item{white-space:nowrap}
   .an-side .user{display:none}
   .det-grid{flex-direction:column}
   .det-right{width:100%}
