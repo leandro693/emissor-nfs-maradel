@@ -93,17 +93,18 @@ function renderShell(){
       </aside>
       <header class="an-topbar">
         <img src="assets/logo-horizontal-white.png" alt="Maradel">
-        <div class="an-topbar-user">
+        <button class="an-topbar-user" id="an-acct" title="Conta">
           <span class="nm">${esc(nome.split(' ')[0])}</span>
-          <button id="an-logout-m" class="ava" title="Sair">${ICON.logout}</button>
-        </div>
+          <span class="ava">${initials(nome)}</span>
+        </button>
       </header>
       <div class="an-main" id="an-main"></div>
       <nav class="an-bottomnav">${bottomNav}</nav>
     </div>`;
   const sair = async () => { await api.signOut(); location.reload(); };
   CTX.root.querySelector('#an-logout').onclick = sair;
-  CTX.root.querySelector('#an-logout-m').onclick = sair;
+  // Conta (mobile): toca no nome/avatar → folha com "Sair da conta".
+  CTX.root.querySelector('#an-acct').onclick = () => abrirFolhaConta(sair);
   // Folha de Cadastros (mobile): Clientes / Tomadores / Equipe.
   CTX.root.querySelector('[data-sheet="cadastros"]').onclick = abrirFolhaCadastros;
   // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
@@ -158,6 +159,25 @@ function abrirFolhaCadastros(){
     else if(n==='tomadores') showTomadores();
     else if(n==='equipe') showEquipe();
   });
+}
+
+// Folha de Conta (mobile): identifica o usuário e oferece "Sair da conta" de
+// forma clara (no desktop o logout fica na sidebar). Recebe a ação de sair.
+function abrirFolhaConta(sair){
+  const nome = CTX.profile.nome || 'Equipe Maradel';
+  const ov = document.createElement('div');
+  ov.className = 'sheet-overlay';
+  ov.innerHTML = `<div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="acct-head">
+      <span class="acct-ava">${initials(nome)}</span>
+      <span class="acct-info"><span class="nm">${esc(nome)}</span><span class="rl">${roleLabel(CTX.profile.role)}</span></span>
+    </div>
+    <button class="sheet-logout" id="ac-sair">${ICON.logout}<span>Sair da conta</span></button>
+  </div>`;
+  ov.addEventListener('click', e => { if(e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  ov.querySelector('#ac-sair').onclick = async () => { ov.remove(); await sair(); };
 }
 
 // ---- FILA -------------------------------------------------------------------

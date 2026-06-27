@@ -332,11 +332,12 @@ button{font-family:inherit}
 .an-topbar{display:none}
 .an-bottomnav{display:none}
 .an-topbar img{height:24px}
-.an-topbar-user{display:flex;align-items:center;gap:10px}
+.an-topbar-user{display:flex;align-items:center;gap:10px;background:none;border:none;cursor:pointer;
+  font-family:inherit;padding:0}
 .an-topbar-user .nm{color:#fff;font-size:13px;font-weight:600;max-width:120px;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
-.an-topbar-user .ava{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.14);
-  color:#fff;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer}
+.an-topbar-user .ava{width:34px;height:34px;border-radius:50%;background:var(--terracota);
+  color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none}
 .an-topbar-user .ava svg{width:17px;height:17px}
 /* itens da barra inferior */
 .an-bottomnav .bn-item{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;
@@ -371,6 +372,18 @@ button{font-family:inherit}
 .sheet-tx{flex:1;min-width:0;display:flex;flex-direction:column}
 .sheet-tx .t{font-size:15px;font-weight:600;color:var(--grafite)}
 .sheet-tx .s{font-size:12.5px;color:var(--mist)}
+/* folha de Conta (mobile): identificação + sair */
+.acct-head{display:flex;align-items:center;gap:13px;padding:6px 6px 16px;border-bottom:1px solid var(--line)}
+.acct-ava{width:46px;height:46px;border-radius:50%;background:var(--terracota);color:#fff;display:flex;
+  align-items:center;justify-content:center;font-size:16px;font-weight:700;flex:none}
+.acct-info{display:flex;flex-direction:column;min-width:0}
+.acct-info .nm{font-size:16px;font-weight:600;color:var(--grafite);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-info .rl{font-size:12.5px;color:var(--mist)}
+.sheet-logout{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;margin-top:14px;
+  border:none;background:var(--st-canc-bg);color:var(--st-canc-fg);font-family:inherit;font-size:15px;
+  font-weight:600;padding:14px;border-radius:12px;cursor:pointer}
+.sheet-logout svg{width:18px;height:18px}
+.sheet-logout:active{opacity:.85}
 
 .an-head{padding:28px 36px 0;background:#fff;border-bottom:1px solid var(--line)}
 .an-head .row1{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px}
