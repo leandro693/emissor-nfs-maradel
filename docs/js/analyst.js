@@ -7,7 +7,7 @@ import {
   ICON, brl, fmtCompetencia, fmtCompetenciaShort, fmtDate, fmtDateTime, relTime, initials, badge,
   esc, toast, copyToClipboard, maskDocInput, openEnvioEmail, openEnvioWhatsApp,
   ressalvaPill, statusTag, notaPublicUrl, linkPublicoCard, bindLinkPublico, STATUS_LABEL,
-  roleLabel, openModal, closeModal, toggle, bindToggle, isToggleOn
+  roleLabel, nomeExibicao, openContaSheet, openModal, closeModal, toggle, bindToggle, isToggleOn
 } from './ui.js';
 
 let CTX = { profile:null, root:null, status:'solicitada', busca:'' };
@@ -32,7 +32,8 @@ const main = () => CTX.root.querySelector('#an-main');
 
 function renderShell(){
   // Cabeçalho mostra o NOME REAL e o PAPEL do usuário logado (item 3).
-  const nome = CTX.profile.nome || 'Equipe Maradel';
+  // Sem nome preenchido, deriva do e-mail (evita "Equipe Maradel" genérico).
+  const nome = nomeExibicao(CTX.profile, 'Equipe Maradel');
   // Preferência de sidebar retraída persiste entre sessões (item 4, paridade com o cliente).
   const collapsed = localStorage.getItem('an_side_collapsed') === '1';
   // Menu organizado em GRUPOS com rótulo e separador (item 2 — "itens soltos"):
@@ -92,7 +93,10 @@ function renderShell(){
         </div>
       </aside>
       <header class="an-topbar">
-        <img src="assets/logo-horizontal-white.png" alt="Maradel">
+        <div class="an-topbar-brand">
+          <img src="assets/logo-horizontal-white.png" alt="Maradel">
+          <span class="an-topbar-prod">Emissor NFS-e</span>
+        </div>
         <button class="an-topbar-user" id="an-acct" title="Conta">
           <span class="nm">${esc(nome.split(' ')[0])}</span>
           <span class="ava">${initials(nome)}</span>
@@ -104,7 +108,8 @@ function renderShell(){
   const sair = async () => { await api.signOut(); location.reload(); };
   CTX.root.querySelector('#an-logout').onclick = sair;
   // Conta (mobile): toca no nome/avatar → folha com "Sair da conta".
-  CTX.root.querySelector('#an-acct').onclick = () => abrirFolhaConta(sair);
+  CTX.root.querySelector('#an-acct').onclick = () =>
+    openContaSheet({ nome, papelLabel: roleLabel(CTX.profile.role), onSair: sair });
   // Folha de Cadastros (mobile): Clientes / Tomadores / Equipe.
   CTX.root.querySelector('[data-sheet="cadastros"]').onclick = abrirFolhaCadastros;
   // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
@@ -159,25 +164,6 @@ function abrirFolhaCadastros(){
     else if(n==='tomadores') showTomadores();
     else if(n==='equipe') showEquipe();
   });
-}
-
-// Folha de Conta (mobile): identifica o usuário e oferece "Sair da conta" de
-// forma clara (no desktop o logout fica na sidebar). Recebe a ação de sair.
-function abrirFolhaConta(sair){
-  const nome = CTX.profile.nome || 'Equipe Maradel';
-  const ov = document.createElement('div');
-  ov.className = 'sheet-overlay';
-  ov.innerHTML = `<div class="sheet">
-    <div class="sheet-grip"></div>
-    <div class="acct-head">
-      <span class="acct-ava">${initials(nome)}</span>
-      <span class="acct-info"><span class="nm">${esc(nome)}</span><span class="rl">${roleLabel(CTX.profile.role)}</span></span>
-    </div>
-    <button class="sheet-logout" id="ac-sair">${ICON.logout}<span>Sair da conta</span></button>
-  </div>`;
-  ov.addEventListener('click', e => { if(e.target === ov) ov.remove(); });
-  document.body.appendChild(ov);
-  ov.querySelector('#ac-sair').onclick = async () => { ov.remove(); await sair(); };
 }
 
 // ---- FILA -------------------------------------------------------------------

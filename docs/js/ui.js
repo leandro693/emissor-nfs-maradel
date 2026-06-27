@@ -134,6 +134,45 @@ export const ROLE_LABEL = {
 };
 export function roleLabel(role){ return ROLE_LABEL[role] || 'Usuário'; }
 
+// Nome para exibir: usa o nome do profile; se vazio, deriva do e-mail
+// (ex.: "leandro.silva@maradel.com" => "Leandro Silva"). Evita cair em
+// "Equipe Maradel" quando a pessoa ainda não preencheu o nome.
+export function nomeExibicao(profile, fallback='Usuário'){
+  const n = (profile?.nome || '').trim();
+  if(n) return n;
+  const local = (profile?.email || '').split('@')[0];
+  if(!local) return fallback;
+  return local.split(/[._-]+/).filter(Boolean)
+    .map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ') || fallback;
+}
+
+// ---- FOLHA DE CONTA (bottom sheet) — usada no escritório e no cliente --------
+// Mostra nome + papel e um botão claro "Sair da conta", com confirmação para
+// evitar saída acidental. onSair: callback que encerra a sessão.
+export function openContaSheet({ nome, papelLabel, onSair }){
+  const ov = document.createElement('div');
+  ov.className = 'sheet-overlay';
+  ov.innerHTML = `<div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="acct-head">
+      <span class="acct-ava">${initials(nome)}</span>
+      <span class="acct-info"><span class="nm">${esc(nome)}</span><span class="rl">${esc(papelLabel||'')}</span></span>
+    </div>
+    <div class="sheet-confirm hidden" id="cs-confirm">Tem certeza que deseja sair?</div>
+    <button class="sheet-logout" id="cs-sair">${ICON.logout}<span>Sair da conta</span></button>`;
+  ov.addEventListener('click', e => { if(e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  const btn = ov.querySelector('#cs-sair');
+  const conf = ov.querySelector('#cs-confirm');
+  let armado = false;
+  btn.onclick = async () => {
+    if(!armado){ armado = true; conf.classList.remove('hidden');
+      btn.querySelector('span').textContent = 'Confirmar saída'; btn.classList.add('arm'); return; }
+    await onSair();
+  };
+  return ov;
+}
+
 // ---- DOM helpers ------------------------------------------------------------
 export const el = (id) => document.getElementById(id);
 export function html(node, str){ node.innerHTML = str; return node; }

@@ -8,7 +8,7 @@ import {
   fmtCompetencia, fmtCompetenciaShort, relTime, fmtDate, initials, badge,
   esc, toast, copyToClipboard, openEnvioEmail, openEnvioWhatsApp,
   ressalvaPill, statusTag, notaPublicUrl, linkPublicoCard, bindLinkPublico,
-  toggle, bindToggle, isToggleOn, fmtDateTime, openModal, closeModal
+  toggle, bindToggle, isToggleOn, fmtDateTime, openModal, closeModal, openContaSheet
 } from './ui.js';
 
 let CTX = { profile:null, cliente:null, root:null, tab:'dashboard' };
@@ -62,10 +62,14 @@ function renderShell(){
       <!-- SHELL — cabeçalho + conteúdo + barra inferior (mobile) -->
       <div class="cli-shell">
         <header class="cli-top">
-          <img class="cli-top-logo" src="assets/logo-horizontal-white.png" alt="Maradel">
+          <div class="cli-top-brand">
+            <img class="cli-top-logo" src="assets/logo-horizontal-white.png" alt="Maradel">
+            <span class="cli-top-prod">Emissor NFS-e</span>
+          </div>
           <h1 class="cli-title" id="cli-title">Início</h1>
           <div class="cli-profile">
             <div class="info"><div class="nm">${esc(nome)}</div><div class="rl">Prestador</div></div>
+            <span class="cli-top-nome">${esc(nome.split(' ')[0])}</span>
             <button id="cli-conta" class="ava" title="Minha conta">${initials(nome)}</button>
             <button id="cli-logout" class="logout" title="Sair da conta">${ICON.logout}</button>
           </div>
@@ -81,10 +85,12 @@ function renderShell(){
       </div>
     </div>`;
 
-  // Sair (ícone de saída, no cabeçalho e na sidebar).
+  // Sair: padronizado com o escritório — abre a folha de Conta com confirmação
+  // (evita saída acidental). A sidebar do desktop também usa a folha.
   const sair = async () => { await api.signOut(); location.reload(); };
-  CTX.root.querySelector('#cli-logout').onclick = sair;
-  CTX.root.querySelector('#cli-logout-side').onclick = sair;
+  const abrirConta = () => openContaSheet({ nome, papelLabel:'Prestador', onSair: sair });
+  CTX.root.querySelector('#cli-logout').onclick = abrirConta;
+  CTX.root.querySelector('#cli-logout-side').onclick = abrirConta;
   // O avatar (iniciais) é identidade, não saída: leva à "Minha conta".
   CTX.root.querySelector('#cli-conta').onclick = () => showMinhaConta();
 
@@ -155,7 +161,10 @@ async function showDashboard(){
   emitidas.forEach(s => { porMes[s.competencia] = (porMes[s.competencia]||0) + Number(s.valor); });
   const meses = Object.keys(porMes).sort().slice(-6);
   const atual = currentCompetencia();
-  const fatAtual = porMes[atual] || (meses.length ? porMes[meses[meses.length-1]] : 0);
+  // Faturamento do MÊS ATUAL (só notas emitidas; canceladas nunca entram). Sem
+  // fallback para meses anteriores — se o mês está zerado (ex.: após cancelar a
+  // única nota), mostra R$ 0,00, coerente com o rótulo do mês.
+  const fatAtual = porMes[atual] || 0;
 
   // Notas com ressalva (faltando número de pedido obrigatório) — item 4.
   // Geram um card de alerta em destaque no topo do dashboard.
@@ -187,14 +196,14 @@ async function showDashboard(){
         ${renderChart(meses, porMes)}
       </div>
 
+      ${ajudaCard(contato)}
+
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span class="section-title">Últimas solicitações</span>
       </div>
-      ${solics.length ? `<div class="qlist">${QHEAD}${solics.slice(0,12).map(rowQueue).join('')}</div>`
+      ${solics.length ? `<div class="qlist">${QHEAD}${solics.slice(0,5).map(rowQueue).join('')}</div>`
         : emptyState('file', 'Sua primeira nota começa aqui',
             'Você ainda não tem solicitações. Crie uma e a Maradel cuida da emissão.')}
-
-      ${ajudaCard(contato)}
     </div>`;
 
   view().querySelectorAll('[data-solic]').forEach(r =>
@@ -255,8 +264,8 @@ function ajudaCard(cfg){
       <span class="help-ic">${ICON.help}</span>
       <span class="help-tx">Precisa de ajuda? Fale com <strong>${esc(nome)}</strong></span>
       <span class="help-links">
-        ${wpp?`<a href="${esc(wpp)}" target="_blank" rel="noopener">${ICON.whatsapp}<span>WhatsApp</span></a>`:''}
-        ${cfg.email?`<a href="mailto:${esc(cfg.email)}">${ICON.mail}<span>E-mail</span></a>`:''}
+        ${wpp?`<a class="help-ico-link" href="${esc(wpp)}" target="_blank" rel="noopener" title="WhatsApp" aria-label="WhatsApp">${ICON.whatsapp}</a>`:''}
+        ${cfg.email?`<a class="help-ico-link" href="mailto:${esc(cfg.email)}" title="E-mail" aria-label="E-mail">${ICON.mail}</a>`:''}
       </span>
     </div>`;
 }
@@ -518,7 +527,9 @@ async function showSolicitacao(id){
         </div>
         ${(s.status==='cancelada' && s.motivo_cancelamento)?`<div class="aviso-ressalva" style="margin-top:16px">${ICON.info}<span>Cancelada pelo cliente. Motivo: <strong>${esc(s.motivo_cancelamento)}</strong></span></div>`:''}
         ${s.status==='solicitada'?`
-        <button class="btn btn-outline btn-block" id="sd-editar" style="margin-top:18px">${ICON.edit}<span>Editar solicitação</span></button>
+        <div style="display:flex;justify-content:center;margin-top:18px">
+          <button class="btn btn-outline btn-sm" id="sd-editar">${ICON.edit}<span>Editar solicitação</span></button>
+        </div>
         <button class="link-danger" id="sd-cancel" style="display:block;margin:14px auto 0">Cancelar solicitação</button>`:''}`}
     </div>`;
   view().querySelector('#sd-back').onclick = showDashboard;
@@ -843,7 +854,9 @@ function showMinhaConta(){
     btn.disabled=false; btn.textContent='Atualizar senha';
   };
 
-  view().querySelector('#mc-sair').onclick = async () => { await api.signOut(); location.reload(); };
+  view().querySelector('#mc-sair').onclick = () => openContaSheet({
+    nome: CTX.profile.nome || CTX.cliente.razao_social, papelLabel:'Prestador',
+    onSair: async () => { await api.signOut(); location.reload(); } });
 }
 
 // Estado vazio reutilizável.

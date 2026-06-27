@@ -108,12 +108,17 @@ button{font-family:inherit}
 .cli-shell{min-height:100vh}
 .cli-side{display:none} /* mobile: sem sidebar (item 1) */
 
-/* cabeçalho do topo */
-.cli-top{background:var(--grafite-top);padding:18px 22px;display:flex;align-items:center;
-  justify-content:space-between;gap:12px}
-.cli-top-logo{height:26px;display:block}
+/* cabeçalho do topo — FIXO no celular (acompanha a rolagem) */
+.cli-top{background:var(--grafite-top);padding:14px 18px;display:flex;align-items:center;
+  justify-content:space-between;gap:10px;position:sticky;top:0;z-index:30}
+.cli-top-brand{display:flex;align-items:center;gap:9px;min-width:0}
+.cli-top-logo{height:24px;display:block}
+.cli-top-prod{color:rgba(255,255,255,.7);font-size:12px;font-weight:600;white-space:nowrap;
+  border-left:1px solid rgba(255,255,255,.22);padding-left:9px}
+.cli-top-nome{color:#fff;font-size:13px;font-weight:600;max-width:90px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
 .cli-title{display:none} /* no mobile mostramos o logo, não o título */
-.cli-profile{display:flex;align-items:center;gap:10px}
+.cli-profile{display:flex;align-items:center;gap:9px}
 .cli-profile .info{display:none} /* nome/papel só no desktop */
 .cli-profile .ava{width:34px;height:34px;border-radius:50%;background:var(--terracota);color:#fff;
   border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600}
@@ -209,15 +214,17 @@ button{font-family:inherit}
 .tom-go{color:var(--mist);width:18px;flex:none;display:flex}
 
 /* card "Precisa de ajuda?" — compacto e discreto (item 5) */
-.help-card{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px;padding:10px 13px;
+/* card "Precisa de ajuda?" — UMA linha: ícone + texto (com reticências) + ações */
+.help-card{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;margin-top:16px;padding:10px 13px;
   background:#fff;border:1px solid var(--line);border-radius:10px;font-size:12.5px}
 .help-ic{width:18px;height:18px;color:var(--terracota);flex:none;display:flex}
 .help-ic svg{width:18px;height:18px}
-.help-tx{color:var(--taupe)}
+.help-tx{color:var(--taupe);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .help-tx strong{color:var(--grafite)}
-.help-links{display:flex;gap:14px;margin-left:auto}
-.help-links a{display:inline-flex;align-items:center;gap:5px;color:var(--terracota-dark);font-weight:600}
-.help-links a svg{width:14px;height:14px}
+.help-links{display:flex;gap:8px;margin-left:auto;flex:none}
+.help-ico-link{width:34px;height:34px;border-radius:9px;background:var(--terracota-subtle);
+  display:inline-flex;align-items:center;justify-content:center}
+.help-ico-link svg{width:17px;height:17px;color:var(--terracota-dark)}
 
 /* chips de filtro rápido (item 7) — Em andamento / Atendidas / Canceladas / Todas */
 .chip-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
@@ -332,6 +339,9 @@ button{font-family:inherit}
 .an-topbar{display:none}
 .an-bottomnav{display:none}
 .an-topbar img{height:24px}
+.an-topbar-brand{display:flex;align-items:center;gap:9px;min-width:0}
+.an-topbar-prod{color:rgba(255,255,255,.7);font-size:12px;font-weight:600;white-space:nowrap;
+  border-left:1px solid rgba(255,255,255,.22);padding-left:9px}
 .an-topbar-user{display:flex;align-items:center;gap:10px;background:none;border:none;cursor:pointer;
   font-family:inherit;padding:0}
 .an-topbar-user .nm{color:#fff;font-size:13px;font-weight:600;max-width:120px;overflow:hidden;
@@ -384,6 +394,8 @@ button{font-family:inherit}
   font-weight:600;padding:14px;border-radius:12px;cursor:pointer}
 .sheet-logout svg{width:18px;height:18px}
 .sheet-logout:active{opacity:.85}
+.sheet-logout.arm{background:var(--st-canc-fg);color:#fff}
+.sheet-confirm{font-size:13.5px;color:var(--st-canc-fg);text-align:center;font-weight:600;margin-top:12px}
 
 .an-head{padding:28px 36px 0;background:#fff;border-bottom:1px solid var(--line)}
 .an-head .row1{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px}
@@ -504,10 +516,17 @@ button{font-family:inherit}
   .an-head h1{font-size:20px}
   .an-head .row1 > div{min-width:0}
   .an-search{width:100%!important;box-sizing:border-box}
-  /* abas roláveis na horizontal sem empurrar a página */
-  .an-tabs{overflow-x:auto;gap:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  .an-tabs::-webkit-scrollbar{display:none}
-  .an-tab{flex:none;white-space:nowrap;padding:10px 12px;font-size:13px}
+  /* botão "Novo" compacto (não estica a tela toda); busca ocupa a linha */
+  .an-head .row1 .btn{align-self:flex-start;width:auto;flex:0 0 auto;white-space:nowrap}
+  .an-head .row1 > div[style]{flex-wrap:wrap;gap:10px}
+  .an-head .row1 .an-search{flex:1 1 100%}
+  /* abas em PÍLULAS que quebram em linhas — vê todas sem rolar para o lado */
+  .an-tabs{flex-wrap:wrap;gap:8px;overflow:visible;padding-bottom:2px}
+  .an-tab{flex:none;white-space:nowrap;border:1px solid var(--line-2);border-radius:999px;
+    padding:7px 13px;font-size:13px;border-bottom:1px solid var(--line-2)}
+  .an-tab.active{background:var(--terracota);border-color:var(--terracota);color:#fff;
+    border-bottom-color:var(--terracota)}
+  .an-tab.active .cnt{background:rgba(255,255,255,.28);color:#fff}
   .an-content{padding:14px 12px}
 
   /* tabelas viram lista: cabeçalho some; linhas empilham (sem overflow) */
@@ -687,6 +706,7 @@ button{font-family:inherit}
   .cli-top{background:#fff;border-bottom:1px solid var(--line);padding:14px 32px;
     position:sticky;top:0;z-index:15}
   .cli-top-logo{display:none}          /* logo está na sidebar */
+  .cli-top-brand,.cli-top-nome{display:none}  /* marca/produto/nome são só do mobile */
   .cli-title{display:block;font-size:18px;font-weight:600;color:var(--grafite)}
   .cli-profile .info{display:block;text-align:right}
   .cli-profile .nm{font-size:13px;font-weight:600;color:var(--grafite)}
