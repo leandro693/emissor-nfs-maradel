@@ -64,6 +64,19 @@ function renderShell(){
     ${grupoCadastros}
     ${grupoGestao.length ? `<div class="nav-sep"></div><div class="nav-label">Gestão</div>${grupoGestao.join('')}` : ''}`;
 
+  // ---- Barra inferior (mobile, paridade com o app do cliente) ----------------
+  // No celular a sidebar dá lugar a uma barra fixa embaixo com até 5 destinos.
+  // Os cadastros (Clientes/Tomadores/Equipe) entram numa folha ("Cadastros").
+  const bn = (nav, ico, label, extra='') =>
+    `<button class="bn-item${nav==='fila'?' active':''}" data-nav="${nav}">${ico}<span>${label}</span>${extra}</button>`;
+  const bottomNav = [
+    bn('fila', ICON.list, 'Fila', `<span class="bn-badge muted" id="bn-fila" hidden></span>`),
+    pode.conferir() ? bn('conferencia', ICON.check, 'Conferir', `<span class="bn-badge" id="bn-conf" hidden></span>`) : '',
+    bn('notas', ICON.file, 'Notas'),
+    `<button class="bn-item bn-cad" data-sheet="cadastros"><span class="bn-ic">${ICON.building}</span><span>Cadastros</span></button>`,
+    pode.admin() ? bn('config', ICON.settings, 'Config') : '',
+  ].filter(Boolean).join('');
+
   CTX.root.innerHTML = `
     <div class="an" data-collapsed="${collapsed?'true':'false'}">
       <aside class="an-side">
@@ -78,9 +91,21 @@ function renderShell(){
           <button id="an-logout" title="Sair" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;width:20px;height:20px">${ICON.logout}</button>
         </div>
       </aside>
+      <header class="an-topbar">
+        <img src="assets/logo-horizontal-white.png" alt="Maradel">
+        <div class="an-topbar-user">
+          <span class="nm">${esc(nome.split(' ')[0])}</span>
+          <button id="an-logout-m" class="ava" title="Sair">${ICON.logout}</button>
+        </div>
+      </header>
       <div class="an-main" id="an-main"></div>
+      <nav class="an-bottomnav">${bottomNav}</nav>
     </div>`;
-  CTX.root.querySelector('#an-logout').onclick = async () => { await api.signOut(); location.reload(); };
+  const sair = async () => { await api.signOut(); location.reload(); };
+  CTX.root.querySelector('#an-logout').onclick = sair;
+  CTX.root.querySelector('#an-logout-m').onclick = sair;
+  // Folha de Cadastros (mobile): Clientes / Tomadores / Equipe.
+  CTX.root.querySelector('[data-sheet="cadastros"]').onclick = abrirFolhaCadastros;
   // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
   CTX.root.querySelector('#an-toggle').onclick = () => {
     const an = CTX.root.querySelector('.an');
@@ -101,10 +126,38 @@ function renderShell(){
   });
 }
 
-// Marca o item ativo na barra lateral.
+// Marca o item ativo na barra lateral e na barra inferior (mobile). O botão
+// "Cadastros" da barra inferior acende quando se está em qualquer cadastro.
 function setNav(nav){
   CTX.root.querySelectorAll('[data-nav]').forEach(b =>
     b.classList.toggle('active', b.dataset.nav===nav));
+  const cad = CTX.root.querySelector('.bn-cad');
+  if(cad) cad.classList.toggle('active', ['clientes','tomadores','equipe'].includes(nav));
+}
+
+// Folha inferior de Cadastros (mobile): atalhos para Clientes, Tomadores e,
+// para o master, Equipe. Fecha ao tocar fora ou após escolher.
+function abrirFolhaCadastros(){
+  const opt = (nav, ico, label, sub) =>
+    `<button class="sheet-item" data-go="${nav}"><span class="sheet-ic">${ico}</span>
+       <span class="sheet-tx"><span class="t">${label}</span><span class="s">${sub}</span></span>${ICON.chevR}</button>`;
+  const itens = [
+    opt('clientes', ICON.users, 'Clientes', 'Prestadores de serviço'),
+    opt('tomadores', ICON.building, 'Tomadores', 'Quem recebe a nota'),
+    pode.master() ? opt('equipe', ICON.user, 'Equipe', 'Usuários internos') : '',
+  ].filter(Boolean).join('');
+  const ov = document.createElement('div');
+  ov.className = 'sheet-overlay';
+  ov.innerHTML = `<div class="sheet"><div class="sheet-grip"></div>
+    <div class="sheet-title">Cadastros</div>${itens}</div>`;
+  ov.addEventListener('click', e => { if(e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  ov.querySelectorAll('[data-go]').forEach(b => b.onclick = () => {
+    const n = b.dataset.go; ov.remove();
+    if(n==='clientes') showClientes();
+    else if(n==='tomadores') showTomadores();
+    else if(n==='equipe') showEquipe();
+  });
 }
 
 // ---- FILA -------------------------------------------------------------------
@@ -123,12 +176,11 @@ async function showFila(){
   const conf = cont.aguardando_conferencia, pend = cont.solicitada;
   const day = conf ? `${conf} aguardando conferência` : (pend ? `${pend} aguardando ação` : 'tudo em dia');
 
-  // Atualiza as bolhas do menu lateral: Conferência (terracota, ação) e
-  // Fila (neutra) com o total de solicitações aguardando.
-  const navConf = CTX.root.querySelector('#nav-conf');
-  if(navConf){ navConf.textContent = conf; navConf.hidden = !conf; }
-  const navFila = CTX.root.querySelector('#nav-fila');
-  if(navFila){ navFila.textContent = pend; navFila.hidden = !pend; }
+  // Atualiza as bolhas do menu (sidebar desktop + barra inferior mobile):
+  // Conferência (terracota, ação) e Fila (neutra) com o total aguardando.
+  const setCnt = (sel, n) => CTX.root.querySelectorAll(sel).forEach(e => { e.textContent = n; e.hidden = !n; });
+  setCnt('#nav-conf, #bn-conf', conf);
+  setCnt('#nav-fila, #bn-fila', pend);
 
   main().innerHTML = `
     <div class="an-head">
@@ -150,7 +202,7 @@ async function showFila(){
     <div class="an-content">
       ${rows.length ? `
         <div class="tbl-head"><span>Cliente (prestador)</span><span>Tomador (recebe)</span><span>Serviço</span><span>Competência</span><span style="text-align:right">Valor</span><span style="text-align:right">Status</span></div>
-        <div class="tbl">${rows.map(filaRow).join('')}</div>`
+        <div class="tbl tbl-fila">${rows.map(filaRow).join('')}</div>`
        : filaEmpty(CTX.status)}
     </div>`;
 

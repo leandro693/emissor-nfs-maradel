@@ -328,6 +328,50 @@ button{font-family:inherit}
 .an-side .user .rl{font-size:11px;color:rgba(255,255,255,.45)}
 .an-main{flex:1;min-width:0;display:flex;flex-direction:column}
 
+/* ---- barra superior + inferior do escritório no CELULAR (ocultas no desktop) */
+.an-topbar{display:none}
+.an-bottomnav{display:none}
+.an-topbar img{height:24px}
+.an-topbar-user{display:flex;align-items:center;gap:10px}
+.an-topbar-user .nm{color:#fff;font-size:13px;font-weight:600;max-width:120px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.an-topbar-user .ava{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.14);
+  color:#fff;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer}
+.an-topbar-user .ava svg{width:17px;height:17px}
+/* itens da barra inferior */
+.an-bottomnav .bn-item{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;background:none;border:none;cursor:pointer;color:var(--mist);
+  font-family:inherit;font-size:10px;font-weight:600;position:relative;padding:7px 2px}
+.an-bottomnav .bn-item svg{width:22px;height:22px}
+.an-bottomnav .bn-item > span:not(.bn-badge):not(.bn-ic){max-width:100%;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;line-height:1.1}
+.an-bottomnav .bn-item.active{color:var(--terracota)}
+.an-bottomnav .bn-item.active svg{stroke:var(--terracota)}
+.bn-badge{position:absolute;top:4px;right:calc(50% - 22px);min-width:17px;height:17px;border-radius:999px;
+  background:var(--terracota);color:#fff;font-size:10.5px;font-weight:700;display:inline-flex;
+  align-items:center;justify-content:center;padding:0 5px;line-height:1;font-variant-numeric:tabular-nums}
+.bn-badge.muted{background:var(--chumbo)}
+.bn-badge[hidden]{display:none}
+/* folha inferior de Cadastros (mobile) */
+.sheet-overlay{position:fixed;inset:0;background:rgba(43,42,44,.5);z-index:1000;display:flex;
+  align-items:flex-end;animation:fadein .15s ease}
+.sheet{width:100%;background:#fff;border-radius:20px 20px 0 0;
+  padding:10px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.2);
+  animation:sheetup .22s cubic-bezier(.22,1,.36,1)}
+@keyframes sheetup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.sheet-grip{width:42px;height:5px;border-radius:999px;background:var(--line-2);margin:4px auto 12px}
+.sheet-title{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--mist);padding:0 6px 6px}
+.sheet-item{display:flex;align-items:center;gap:14px;width:100%;background:none;border:none;cursor:pointer;
+  font-family:inherit;text-align:left;padding:14px 6px;border-top:1px solid var(--line)}
+.sheet-item > svg{width:18px;height:18px;color:var(--mist);flex:none}
+.sheet-ic{width:40px;height:40px;border-radius:11px;background:var(--bg);display:flex;align-items:center;
+  justify-content:center;flex:none}
+.sheet-ic svg{width:21px;height:21px;color:var(--terracota)}
+.sheet-tx{flex:1;min-width:0;display:flex;flex-direction:column}
+.sheet-tx .t{font-size:15px;font-weight:600;color:var(--grafite)}
+.sheet-tx .s{font-size:12.5px;color:var(--mist)}
+
 .an-head{padding:28px 36px 0;background:#fff;border-bottom:1px solid var(--line)}
 .an-head .row1{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px}
 .an-head h1{font-size:24px;font-weight:600;letter-spacing:-.01em}
@@ -430,21 +474,51 @@ button{font-family:inherit}
 .mail-label{display:block;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
   color:var(--chumbo);margin:16px 0 8px}
 
-/* responsivo: analista em telas estreitas */
+/* responsivo: ESCRITÓRIO no celular — barra inferior fixa (como app), top bar
+   enxuta e conteúdo sem vazar para os lados. */
 @media(max-width:720px){
-  .an{flex-direction:column}
-  .an-side{width:100%!important;height:auto;flex-direction:row;position:static;padding:12px;overflow-x:auto;align-items:center}
-  .an-side .brand{padding:0 12px 0 4px}
-  .an-side .brand-toggle{display:none}            /* retrair só faz sentido no desktop */
-  .an-side .nav{flex-direction:row;padding:0;gap:2px}
-  .an-side .nav-label,.an-side .nav-sep{display:none}  /* sem rótulos/divisórias na barra horizontal */
-  .an-side .nav .item{white-space:nowrap}
-  .an-side .user{display:none}
-  .det-grid{flex-direction:column}
-  .det-right{width:100%}
+  .an{flex-direction:column;min-height:100vh}
+  .an-side{display:none}                 /* sidebar é só desktop */
+  .an-topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:10px 16px;background:var(--grafite-top);position:sticky;top:0;z-index:30}
+  .an-bottomnav{display:flex;position:fixed;left:0;right:0;bottom:0;height:62px;background:#fff;
+    border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom)}
+  .an-main{padding-bottom:74px;overflow-x:hidden}   /* espaço p/ a barra; sem rolagem lateral */
+
+  /* cabeçalho da tela: título e busca empilhados, largura total */
+  .an-head{padding:16px 14px 0}
+  .an-head .row1{flex-direction:column;align-items:stretch;gap:12px;margin-bottom:14px}
+  .an-head h1{font-size:20px}
+  .an-head .row1 > div{min-width:0}
+  .an-search{width:100%!important;box-sizing:border-box}
+  /* abas roláveis na horizontal sem empurrar a página */
+  .an-tabs{overflow-x:auto;gap:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .an-tabs::-webkit-scrollbar{display:none}
+  .an-tab{flex:none;white-space:nowrap;padding:10px 12px;font-size:13px}
+  .an-content{padding:14px 12px}
+
+  /* tabelas viram lista: cabeçalho some; linhas empilham (sem overflow) */
   .tbl-head{display:none}
-  .tbl-row{grid-template-columns:1fr auto;grid-auto-rows:auto}
-  .tbl-row .svc,.tbl-row .comp{display:none}
+  .tbl .tbl-row{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:14px}
+  /* FILA: card 2×2 — cliente/tomador à esquerda (com reticências),
+     valor/status à direita numa coluna estreita. Nada vaza para os lados. */
+  .tbl-fila .tbl-row{display:grid;grid-template-columns:minmax(0,1fr) auto;
+    grid-template-rows:auto auto;gap:4px 12px;align-items:center}
+  .tbl-fila .tbl-row > div{min-width:0}
+  .tbl-fila .tbl-row > div:nth-child(1){grid-area:1/1}   /* cliente */
+  .tbl-fila .tbl-row > div:nth-child(2){grid-area:2/1}   /* tomador */
+  .tbl-fila .tbl-row .svc,.tbl-fila .tbl-row .comp{display:none}
+  .tbl-fila .tbl-row .val{grid-area:1/2;justify-self:end;text-align:right;white-space:nowrap}
+  .tbl-fila .tbl-row .st{grid-area:2/2;justify-self:end}
+  .tbl-fila .tbl-row .cli-nm,.tbl-fila .tbl-row .tom,
+  .tbl-fila .tbl-row > div > .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* detalhe empilha em coluna única */
+  .det{min-height:auto}
+  .det-head{padding:14px 16px}
+  .det-grid{flex-direction:column}
+  .det-left{padding:18px 16px;border-right:none;border-bottom:1px solid var(--line)}
+  .det-right{width:100%;padding:18px 16px}
 }
 
 /* ============================================================
