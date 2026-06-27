@@ -226,11 +226,18 @@ button{font-family:inherit}
 .chip:hover{border-color:var(--terracota)}
 .chip.on{background:var(--terracota);border-color:var(--terracota);color:#fff}
 
-/* contador de conferência no menu lateral do analista */
-.an-side .nav .item .nav-cnt{margin-left:auto;background:var(--terracota);color:#fff;font-size:11px;
-  font-weight:700;min-width:18px;height:18px;border-radius:999px;display:inline-flex;align-items:center;
-  justify-content:center;padding:0 5px}
+/* contadores no menu lateral do analista (Conferência = terracota; Fila = neutro) */
+.an-side .nav .item .nav-cnt{margin-left:auto;background:var(--terracota);color:#fff;font-size:12.5px;
+  font-weight:700;line-height:1;min-width:22px;height:22px;border-radius:999px;display:inline-flex;
+  align-items:center;justify-content:center;padding:0 7px;font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum";letter-spacing:.02em}
+/* variante neutra: total de notas na Fila (sem o peso de "ação urgente") */
+.an-side .nav .item .nav-cnt.muted{background:rgba(255,255,255,.16);color:#fff}
 .nav-cnt[hidden]{display:none}
+/* selo discreto "exige nº de pedido" na lista de tomadores (equipe) */
+.tom-flag{display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;padding:1px 7px;
+  border-radius:999px;background:var(--st-solic-bg);color:var(--terracota-dark);vertical-align:middle;
+  margin-left:6px;letter-spacing:.02em}
 
 /* selo de papel (tela de equipe) */
 .role-pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:4px 10px;

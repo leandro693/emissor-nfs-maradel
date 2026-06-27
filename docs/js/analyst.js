@@ -40,14 +40,20 @@ function renderShell(){
   const item = (nav, ico, label, extra='') =>
     `<button class="item${nav==='fila'?' active':''}" data-nav="${nav}">${ico}<span>${label}</span>${extra}</button>`;
   const grupoOperacao = [
-    item('fila', ICON.list, 'Fila'),
+    item('fila', ICON.list, 'Fila', `<span class="nav-cnt muted" id="nav-fila" hidden></span>`),
     pode.conferir() ? item('conferencia', ICON.check, 'Conferência', `<span class="nav-cnt" id="nav-conf" hidden></span>`) : '',
     item('notas', ICON.file, 'Notas emitidas'),
   ].filter(Boolean).join('');
-  const grupoCadastros = item('clientes', ICON.users, 'Clientes');
-  const grupoGestao = [
+  // CADASTROS reúne tudo que é cadastro: prestadores (clientes), tomadores e a
+  // equipe interna. Tomadores são gerenciados aqui pelo escritório e vinculados
+  // a um prestador; o vínculo aparece para o cliente na nova solicitação.
+  const grupoCadastros = [
+    item('clientes', ICON.users, 'Clientes'),
+    item('tomadores', ICON.building, 'Tomadores'),
     pode.master() ? item('equipe', ICON.user, 'Equipe') : '',
-    pode.admin()  ? item('config', ICON.settings, 'Configurações') : '',
+  ].filter(Boolean).join('');
+  const grupoGestao = [
+    pode.admin() ? item('config', ICON.settings, 'Configurações') : '',
   ].filter(Boolean);
 
   const nav = `
@@ -89,6 +95,7 @@ function renderShell(){
     else if(n==='conferencia'){ CTX.status='aguardando_conferencia'; showFila(); }
     else if(n==='notas'){ CTX.status='emitida'; showFila(); }
     else if(n==='clientes'){ showClientes(); }
+    else if(n==='tomadores'){ showTomadores(); }
     else if(n==='equipe'){ showEquipe(); }
     else if(n==='config'){ showConfiguracoes(); }
   });
@@ -116,9 +123,12 @@ async function showFila(){
   const conf = cont.aguardando_conferencia, pend = cont.solicitada;
   const day = conf ? `${conf} aguardando conferência` : (pend ? `${pend} aguardando ação` : 'tudo em dia');
 
-  // Atualiza a bolha de Conferência no menu lateral.
+  // Atualiza as bolhas do menu lateral: Conferência (terracota, ação) e
+  // Fila (neutra) com o total de solicitações aguardando.
   const navConf = CTX.root.querySelector('#nav-conf');
   if(navConf){ navConf.textContent = conf; navConf.hidden = !conf; }
+  const navFila = CTX.root.querySelector('#nav-fila');
+  if(navFila){ navFila.textContent = pend; navFila.hidden = !pend; }
 
   main().innerHTML = `
     <div class="an-head">
@@ -436,6 +446,148 @@ function showNovoCliente(){
       }
       toast('Cliente cadastrado e convite enviado'); showClientes();
     }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.innerHTML=`${ICON.send}<span>Salvar e enviar convite</span>`; }
+  };
+}
+
+// ---- TOMADORES (cadastro pela equipe, vinculado a um prestador) -------------
+// O escritório cadastra os tomadores e os vincula a um prestador (cliente). O
+// mesmo tomador (ex.: Rappi) pode existir para vários prestadores — um registro
+// por prestador. O vínculo aparece para o cliente na nova solicitação. A RLS
+// (is_staff) já libera a equipe a gerenciar todos os tomadores; sem mudança de
+// banco. Lista com busca; cada linha abre o cadastro para ver/editar.
+let TOMS = []; // cache da última listagem (usado pela busca/edição)
+
+async function showTomadores(){
+  setNav('tomadores');
+  main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
+  const [toms, clientes] = await Promise.all([ api.listTomadoresComCliente(), api.listClientes() ]);
+  TOMS = toms;
+  const cols = '1.9fr 1.4fr 1.9fr 1.2fr 60px';
+  const linha = t => `
+    <div class="tbl-row" style="grid-template-columns:${cols}" data-open-tom="${t.id}">
+      <div class="cli-nm">${esc(t.nome)}${t.exige_numero_pedido?` <span class="tom-flag" title="Exige número de pedido">nº pedido</span>`:''}</div>
+      <div class="tom">${esc(t.doc||'—')}</div>
+      <div class="svc">${esc(t.cliente?.razao_social||'— sem prestador')}</div>
+      <div class="svc">${esc(t.cidade||'—')}${t.uf?'/'+esc(t.uf):''}</div>
+      <div style="text-align:right"><button class="icon-danger" data-del-tom="${t.id}" data-nm="${esc(t.nome)}" title="Excluir tomador">${ICON.x}</button></div>
+    </div>`;
+  const tabela = lista => lista.length ? `
+    <div class="tbl-head" style="grid-template-columns:${cols}"><span>Tomador (recebe)</span><span>CNPJ / CPF</span><span>Prestador (cliente)</span><span>Cidade</span><span></span></div>
+    <div class="tbl">${lista.map(linha).join('')}</div>`
+    : `<div class="empty-mini">Nenhum tomador encontrado.</div>`;
+
+  main().innerHTML = `
+    <div class="an-head">
+      <div class="row1">
+        <div><h1>Tomadores <span style="font-size:13px;font-weight:500;color:var(--mist)">· quem recebe a nota</span></h1>
+          <div class="day">${toms.length} tomador(es) cadastrado(s)</div></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div class="an-search">${ICON.search}<input id="tm-busca" placeholder="Buscar tomador, CNPJ ou prestador…"></div>
+          <button class="btn btn-primary btn-sm" id="tm-novo"${clientes.length?'':' disabled title="Cadastre um cliente primeiro"'}>${ICON.plus}<span>Novo tomador</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="an-content">
+      ${toms.length ? `<div id="tm-list">${tabela(toms)}</div>`
+        : `<div class="empty"><div class="ico"><span style="width:42px;height:42px">${ICON.building}</span></div>
+            <h3>Nenhum tomador ainda</h3><p>Cadastre um tomador e vincule a um prestador. Ele passa a aparecer para o cliente ao criar uma solicitação.</p></div>`}
+    </div>`;
+
+  const bindRows = () => {
+    main().querySelectorAll('[data-open-tom]').forEach(r => r.onclick = () =>
+      showTomadorForm(TOMS.find(x=>x.id===r.dataset.openTom), clientes));
+    main().querySelectorAll('[data-del-tom]').forEach(b => b.onclick = async (e) => {
+      e.stopPropagation();
+      if(!confirm(`Excluir o tomador "${b.dataset.nm}"? Esta ação não pode ser desfeita.`)) return;
+      try{ await api.excluirTomador(b.dataset.delTom); toast('Tomador excluído'); showTomadores(); }
+      catch(err){
+        // FK on delete restrict: há solicitações usando este tomador.
+        const fk = /violates foreign key|restrict/i.test(err.message||'');
+        toast(fk ? 'Não dá para excluir: há solicitações usando este tomador.' : 'Erro: '+err.message);
+      }
+    });
+  };
+  const novo = main().querySelector('#tm-novo');
+  if(novo && clientes.length) novo.onclick = () => showTomadorForm(null, clientes);
+  bindRows();
+
+  // Busca local por tomador (nome/doc/cidade) ou prestador (razão/CNPJ).
+  const busca = main().querySelector('#tm-busca');
+  if(busca) busca.oninput = () => {
+    const b = busca.value.trim().toLowerCase();
+    const filtrada = TOMS.filter(t =>
+      (t.nome||'').toLowerCase().includes(b) ||
+      (t.doc||'').toLowerCase().includes(b) ||
+      (t.cidade||'').toLowerCase().includes(b) ||
+      (t.cliente?.razao_social||'').toLowerCase().includes(b) ||
+      (t.cliente?.cnpj||'').toLowerCase().includes(b));
+    main().querySelector('#tm-list').innerHTML = tabela(filtrada);
+    bindRows();
+  };
+}
+
+// Formulário de tomador (equipe). Cria (tomador=null) ou edita. Ao criar, exige
+// escolher o prestador; ao editar, o prestador fica fixo (trocar o dono de um
+// tomador com solicitações geraria inconsistência).
+function showTomadorForm(tomador, clientes){
+  const editando = !!tomador;
+  const t = tomador || {};
+  const clienteId = t.cliente_id || (clientes[0]?.id || '');
+  const prestadorNome = editando ? (t.cliente?.razao_social || '—') : '';
+  const selOpt = (v, opt) => v===opt ? 'selected' : '';
+  main().innerHTML = `
+    <div class="det-head">
+      <button class="back" id="nt-back">${ICON.back}</button>
+      <div><h1>${editando?'Editar tomador':'Novo tomador'}</h1>
+        <div class="sub" style="font-size:12.5px;color:var(--mist);margin-top:2px">${editando?'Tomador vinculado a um prestador.':'Vincule o tomador a um prestador (cliente).'}</div></div>
+    </div>
+    <div class="an-content" style="max-width:560px">
+      <div class="field"><label>Prestador (cliente)${editando?'':' <span class="req">obrigatório</span>'}</label>
+        ${editando
+          ? `<input class="input" value="${esc(prestadorNome)}" disabled>`
+          : `<select class="select" id="nt-cliente">${clientes.map(c=>`<option value="${c.id}" ${selOpt(clienteId,c.id)}>${esc(c.razao_social)}${c.cnpj?' — '+esc(c.cnpj):''}</option>`).join('')}</select>`}
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Tipo</label>
+          <select class="select" id="nt-tipo">
+            <option value="PJ" ${selOpt(t.tipo,'PJ')}>Pessoa Jurídica (CNPJ)</option>
+            <option value="PF" ${selOpt(t.tipo,'PF')}>Pessoa Física (CPF)</option>
+          </select></div>
+        <div class="field"><label>CNPJ / CPF</label><input class="input" id="nt-doc" inputmode="numeric" value="${esc(t.doc||'')}" placeholder="00.000.000/0000-00"></div>
+      </div>
+      <div class="field"><label>Razão social / Nome</label><input class="input" id="nt-nome" value="${esc(t.nome||'')}" placeholder="Nome do tomador"></div>
+      <div class="field"><label>E-mail <span style="text-transform:none;letter-spacing:0;color:var(--mist)">opcional</span></label><input class="input" id="nt-email" type="email" value="${esc(t.email||'')}" placeholder="contato@tomador.com.br"></div>
+      <div class="field"><label>Endereço</label><input class="input" id="nt-end" value="${esc(t.endereco||'')}" placeholder="Rua, número, bairro"></div>
+      <div class="form-grid form-grid-3">
+        <div class="field"><label>Cidade</label><input class="input" id="nt-cid" value="${esc(t.cidade||'')}" placeholder="Cidade"></div>
+        <div class="field"><label>UF</label><input class="input" id="nt-uf" maxlength="2" value="${esc(t.uf||'')}" placeholder="SP"></div>
+        <div class="field"><label>CEP</label><input class="input" id="nt-cep" value="${esc(t.cep||'')}" placeholder="00000-000"></div>
+      </div>
+      <div class="field">
+        <label>Número de pedido obrigatório?</label>
+        ${toggle('nt-exige', 'Exigir número de pedido nas notas deste tomador', !!t.exige_numero_pedido)}
+        <div style="font-size:12px;color:var(--mist);margin-top:8px">Se ligado, a solicitação sem número de pedido segue com ressalva e a Maradel só emite após o preenchimento.</div>
+      </div>
+      <button class="btn btn-primary btn-block" id="nt-save" style="margin-top:6px">${editando?'Salvar alterações':'Salvar tomador'}</button>
+    </div>`;
+  maskDocInput(main().querySelector('#nt-doc'));
+  bindToggle(main(), 'nt-exige');
+  main().querySelector('#nt-back').onclick = showTomadores;
+  main().querySelector('#nt-save').onclick = async () => {
+    const g = id => main().querySelector(id).value.trim();
+    const nome = g('#nt-nome'), doc = g('#nt-doc');
+    const cliente_id = editando ? t.cliente_id : main().querySelector('#nt-cliente')?.value;
+    if(!cliente_id) return toast('Selecione o prestador');
+    if(!nome || !doc) return toast('Preencha nome e documento');
+    const campos = { tipo:g('#nt-tipo'), doc, nome, email:g('#nt-email')||null,
+      endereco:g('#nt-end'), cidade:g('#nt-cid'), uf:g('#nt-uf'), cep:g('#nt-cep'),
+      exige_numero_pedido: isToggleOn(main(), 'nt-exige') };
+    const btn = main().querySelector('#nt-save'); btn.disabled=true; btn.textContent='Salvando…';
+    try{
+      if(editando) await api.atualizarTomador(t.id, campos);
+      else         await api.criarTomador({ cliente_id, ...campos });
+      toast(editando?'Tomador atualizado':'Tomador cadastrado'); showTomadores();
+    }catch(e){ toast('Erro: '+e.message); btn.disabled=false; btn.textContent=editando?'Salvar alterações':'Salvar tomador'; }
   };
 }
 

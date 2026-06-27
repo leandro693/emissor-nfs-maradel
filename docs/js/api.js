@@ -229,6 +229,25 @@ export async function criarTomador(t){
   return data;
 }
 
+// EQUIPE: lista TODOS os tomadores com o prestador (cliente) embutido. A RLS
+// (is_staff) libera a leitura de todos para a equipe. Usado na tela de cadastro
+// de tomadores do escritório, onde o tomador é vinculado a um prestador.
+export async function listTomadoresComCliente(){
+  const { data, error } = await supabase.from('tomadores')
+    .select('*, cliente:clientes(id, razao_social, cnpj)')
+    .order('created_at', { ascending:false });
+  if(error) throw error;
+  return data;
+}
+
+// Exclui um tomador. A FK solicitacoes.tomador_id é "on delete restrict": se
+// houver solicitações usando este tomador, o banco recusa a exclusão — a tela
+// trata a mensagem e orienta o usuário.
+export async function excluirTomador(id){
+  const { error } = await supabase.from('tomadores').delete().eq('id', id);
+  if(error) throw error;
+}
+
 // ---- SOLICITAÇÕES -----------------------------------------------------------
 
 // Lista solicitações do cliente logado (com tomador embutido).
