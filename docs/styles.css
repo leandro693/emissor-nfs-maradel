@@ -87,14 +87,15 @@ button{font-family:inherit}
 @keyframes spin{to{transform:rotate(360deg)}}
 .center-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
 
-/* splash de abertura (apresenta a marca por ~2s ao abrir o app) */
+/* splash de abertura (apresenta a marca por ~5s, com contador, ao abrir) */
 .splash{position:fixed;inset:0;background:var(--grafite-top);display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:16px;padding:30px;text-align:center;z-index:9999;
+  align-items:center;justify-content:center;gap:14px;padding:32px;text-align:center;z-index:9999;
   animation:fadein .25s ease}
-.splash-logo{height:40px;opacity:.97}
-.splash-prod{color:var(--terracota);font-size:15px;font-weight:600;letter-spacing:.02em}
-.splash-msg{color:rgba(255,255,255,.55);font-size:13px;max-width:280px;line-height:1.55;margin-top:4px}
-.splash .spinner{border-color:rgba(255,255,255,.18);border-top-color:var(--terracota);margin-top:4px}
+.splash-logo{height:46px;opacity:.98}
+.splash-tag{color:rgba(255,255,255,.5);font-size:12px;max-width:300px;line-height:1.6;letter-spacing:.01em}
+.splash-prod{color:var(--terracota);font-size:16px;font-weight:700;letter-spacing:.02em;margin-top:2px}
+.splash-count{color:rgba(255,255,255,.68);font-size:13.5px;margin-top:12px}
+.splash-count strong{color:#fff;font-size:17px;display:inline-block;min-width:14px}
 
 /* ============================================================
    LOGIN / ONBOARDING (mobile-first, centralizado)
@@ -107,6 +108,17 @@ button{font-family:inherit}
 .auth-card p.sub{font-size:14.5px;color:var(--taupe);margin-top:8px;line-height:1.55}
 .auth-foot{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:20px;
   font-size:12.5px;color:var(--mist)}
+/* login com topo de marca em fundo escuro (mostra o gomo BRANCO da logo) */
+.auth-wrap-brand{flex-direction:column;gap:22px;background:var(--grafite-top)}
+.auth-brand{text-align:center;max-width:420px;width:100%}
+.auth-brand-logo{height:46px;margin-bottom:14px}
+.auth-brand-tag{color:rgba(255,255,255,.62);font-size:12.5px;line-height:1.6;max-width:340px;margin:0 auto}
+.auth-brand-link{margin-top:16px;background:none;border:1px solid rgba(255,255,255,.25);color:#fff;
+  font-family:inherit;font-size:13px;font-weight:600;padding:9px 18px;border-radius:999px;cursor:pointer;
+  transition:all .15s ease}
+.auth-brand-link:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.45)}
+.auth-prod{color:var(--terracota-dark);font-size:13px;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;margin-bottom:10px}
 
 /* ============================================================
    APP CLIENTE — layout adaptativo (item 1)
@@ -553,7 +565,9 @@ button{font-family:inherit}
   /* abas em PÍLULAS que quebram em linhas — vê todas sem rolar para o lado */
   .an-tabs{flex-wrap:wrap;gap:8px;overflow:visible;padding-bottom:2px}
   .an-tab{flex:none;white-space:nowrap;border:1px solid var(--line-2);border-radius:999px;
-    padding:7px 13px;font-size:13px;border-bottom:1px solid var(--line-2)}
+    padding:7px 11px;font-size:12.5px;border-bottom:1px solid var(--line-2)}
+  .an-tabs{justify-content:space-between}
+  .an-tab .cnt{min-width:18px;height:18px;font-size:11px}
   .an-tab.active{background:var(--terracota);border-color:var(--terracota);color:#fff;
     border-bottom-color:var(--terracota)}
   .an-tab.active .cnt{background:rgba(255,255,255,.28);color:#fff}

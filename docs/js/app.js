@@ -6,7 +6,7 @@
 // ============================================================
 import { supabase } from './supabaseClient.js';
 import * as api from './api.js';
-import { ICON, esc, toast } from './ui.js';
+import { ICON, esc, toast, openModal, closeModal } from './ui.js';
 import { mountCliente } from './client.js';
 import { mountAnalista } from './analyst.js';
 
@@ -26,17 +26,25 @@ function loading(msg='Carregando…'){
 // Mostra a marca por ~2s ao abrir (mesmo com login salvo), apresentando a
 // empresa antes de entrar no produto. O tempo mínimo é garantido no 1º
 // roteamento (ensureSplashDone), independente da rapidez da sessão.
-const SPLASH_MIN_MS = 2000;
-let splashUntil = 0, primeiroRoteamento = true;
+const SPLASH_MIN_MS = 5000;
+let splashUntil = 0, primeiroRoteamento = true, splashTimer = null;
 function splash(){
   splashUntil = Date.now() + SPLASH_MIN_MS;
   root.innerHTML = `
     <div class="splash">
       <img class="splash-logo" src="assets/logo-horizontal-white.png" alt="Grupo Maradel">
+      <div class="splash-tag">Serviços de contabilidade · Administração de condomínios · Desenvolvimento de softwares sob medida</div>
       <div class="splash-prod">Emissor de Notas</div>
-      <div class="spinner"></div>
-      <div class="splash-msg">Conectando ao sistema de notas fiscais do Grupo Maradel…</div>
+      <div class="splash-count" id="splash-count">Entrando no sistema em <strong>5</strong></div>
     </div>`;
+  // contador regressivo 5 → 1 (visual; o tempo real é garantido por ensureSplashDone)
+  let n = 5;
+  const strong = root.querySelector('#splash-count strong');
+  clearInterval(splashTimer);
+  splashTimer = setInterval(() => {
+    n--; if(n <= 0){ clearInterval(splashTimer); return; }
+    const s = root.querySelector('#splash-count strong'); if(s) s.textContent = String(n);
+  }, 1000);
 }
 async function ensureSplashDone(){
   const restante = splashUntil - Date.now();
@@ -47,8 +55,14 @@ async function ensureSplashDone(){
 function renderLogin(){
   aguardandoSenha = false;
   root.innerHTML = `
-    <div class="auth-wrap"><div class="auth-card">
-      <img class="logo" src="assets/logo-horizontal-dark.png" alt="Maradel">
+    <div class="auth-wrap auth-wrap-brand">
+      <div class="auth-brand">
+        <img class="auth-brand-logo" src="assets/logo-horizontal-white.png" alt="Grupo Maradel">
+        <div class="auth-brand-tag">Serviços de contabilidade · Administração de condomínios · Desenvolvimento de softwares sob medida</div>
+        <button class="auth-brand-link" id="lg-produtos">Conheça nossos produtos e serviços</button>
+      </div>
+      <div class="auth-card">
+      <div class="auth-prod">Emissor de Notas</div>
       <h1>Acesse sua conta</h1>
       <p class="sub">Entre com seu e-mail e senha. O acesso é criado pela Maradel.</p>
       <div style="margin-top:30px">
@@ -84,6 +98,15 @@ function renderLogin(){
     // onAuthStateChange (SIGNED_IN) cuida do roteamento.
   };
   document.getElementById('lg-forgot').onclick = renderEsqueciSenha;
+  // "Conheça nossos produtos e serviços" — página em construção por enquanto.
+  document.getElementById('lg-produtos').onclick = () => {
+    const m = openModal(`
+      <div class="modal-head"><h3>Em construção</h3><button class="modal-x" id="ec-x">${ICON.x}</button></div>
+      <p class="modal-sub">Estamos preparando esta página. Em breve você poderá conhecer todos os produtos e serviços do <strong>Grupo Maradel</strong> — contabilidade, administração de condomínios e desenvolvimento de softwares sob medida.</p>
+      <div class="modal-actions"><button class="btn btn-primary btn-block" id="ec-ok">Entendi</button></div>`);
+    m.querySelector('#ec-x').onclick = closeModal;
+    m.querySelector('#ec-ok').onclick = closeModal;
+  };
 }
 
 // ---- ESQUECI MINHA SENHA ----------------------------------------------------

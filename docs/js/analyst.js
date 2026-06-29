@@ -209,7 +209,7 @@ async function showFila(){
       </div>
       <div class="an-tabs" ${buscando?'style="display:none"':''}>
         ${tab('solicitada', cont.solicitada + cont.em_emissao, 'Solicitadas')}
-        ${pode.conferir() ? tab('aguardando_conferencia', cont.aguardando_conferencia, 'Em conferência') : ''}
+        ${pode.conferir() ? tab('aguardando_conferencia', cont.aguardando_conferencia, 'Conferência') : ''}
         ${tab('emitida', cont.emitida, 'Atendidas')}
       </div>
       ${buscando?`<div class="an-busca-hint">${ICON.search}<span>Resultados de <strong>todos os status</strong> (inclui canceladas) para "${esc(CTX.busca)}"</span></div>`:''}
