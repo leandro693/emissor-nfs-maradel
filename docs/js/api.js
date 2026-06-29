@@ -266,7 +266,10 @@ export async function listSolicitacoesAnalista({ status, busca } = {}){
   let q = supabase.from('solicitacoes')
     .select('*, cliente:clientes(*), tomador:tomadores(*), nota:notas(*)')
     .order('created_at', { ascending:false });
-  if(status) q = q.eq('status', status);
+  // status pode ser: string (um), array (vários, ex.: solicitada+em_emissao) ou
+  // null/undefined (todos — usado na busca, que alcança até as canceladas).
+  if(Array.isArray(status)) q = q.in('status', status);
+  else if(status) q = q.eq('status', status);
   const { data, error } = await q;
   if(error) throw error;
   let rows = data;

@@ -147,9 +147,13 @@ export function nomeExibicao(profile, fallback='Usuário'){
 }
 
 // ---- FOLHA DE CONTA (bottom sheet) — usada no escritório e no cliente --------
-// Mostra nome + papel e um botão claro "Sair da conta", com confirmação para
-// evitar saída acidental. onSair: callback que encerra a sessão.
-export function openContaSheet({ nome, papelLabel, onSair }){
+// Mostra nome + papel, ações opcionais (ex.: Configurações — fora do dia a dia)
+// e um botão claro "Sair da conta", com confirmação para evitar saída acidental.
+//   acoes: [{ label, sub?, icon, onClick }]   onSair: encerra a sessão.
+export function openContaSheet({ nome, papelLabel, acoes = [], onSair }){
+  const acoesHTML = acoes.map((a, i) =>
+    `<button class="sheet-item" data-acao="${i}"><span class="sheet-ic">${a.icon}</span>
+       <span class="sheet-tx"><span class="t">${esc(a.label)}</span>${a.sub?`<span class="s">${esc(a.sub)}</span>`:''}</span>${ICON.chevR}</button>`).join('');
   const ov = document.createElement('div');
   ov.className = 'sheet-overlay';
   ov.innerHTML = `<div class="sheet">
@@ -158,10 +162,14 @@ export function openContaSheet({ nome, papelLabel, onSair }){
       <span class="acct-ava">${initials(nome)}</span>
       <span class="acct-info"><span class="nm">${esc(nome)}</span><span class="rl">${esc(papelLabel||'')}</span></span>
     </div>
+    ${acoesHTML}
     <div class="sheet-confirm hidden" id="cs-confirm">Tem certeza que deseja sair?</div>
     <button class="sheet-logout" id="cs-sair">${ICON.logout}<span>Sair da conta</span></button>`;
   ov.addEventListener('click', e => { if(e.target === ov) ov.remove(); });
   document.body.appendChild(ov);
+  acoes.forEach((a, i) => {
+    ov.querySelector(`[data-acao="${i}"]`).onclick = () => { ov.remove(); a.onClick?.(); };
+  });
   const btn = ov.querySelector('#cs-sair');
   const conf = ov.querySelector('#cs-confirm');
   let armado = false;

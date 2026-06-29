@@ -63,8 +63,8 @@ function renderShell(){
       <div class="cli-shell">
         <header class="cli-top">
           <div class="cli-top-brand">
-            <img class="cli-top-logo" src="assets/logo-horizontal-white.png" alt="Maradel">
-            <span class="cli-top-prod">Emissor NFS-e</span>
+            <img class="cli-top-mark" src="assets/logo-mark.png" alt="Maradel">
+            <span class="cli-top-prod">Emissor de Notas</span>
           </div>
           <h1 class="cli-title" id="cli-title">Início</h1>
           <div class="cli-profile">

@@ -22,6 +22,27 @@ function loading(msg='Carregando…'){
   root.innerHTML = `<div class="center-screen"><div class="spinner"></div><div style="color:var(--taupe);font-size:14px">${msg}</div></div>`;
 }
 
+// ---- SPLASH DE ABERTURA -----------------------------------------------------
+// Mostra a marca por ~2s ao abrir (mesmo com login salvo), apresentando a
+// empresa antes de entrar no produto. O tempo mínimo é garantido no 1º
+// roteamento (ensureSplashDone), independente da rapidez da sessão.
+const SPLASH_MIN_MS = 2000;
+let splashUntil = 0, primeiroRoteamento = true;
+function splash(){
+  splashUntil = Date.now() + SPLASH_MIN_MS;
+  root.innerHTML = `
+    <div class="splash">
+      <img class="splash-logo" src="assets/logo-horizontal-white.png" alt="Grupo Maradel">
+      <div class="splash-prod">Emissor de Notas</div>
+      <div class="spinner"></div>
+      <div class="splash-msg">Conectando ao sistema de notas fiscais do Grupo Maradel…</div>
+    </div>`;
+}
+async function ensureSplashDone(){
+  const restante = splashUntil - Date.now();
+  if(restante > 0) await new Promise(r => setTimeout(r, restante));
+}
+
 // ---- LOGIN (e-mail + senha) -------------------------------------------------
 function renderLogin(){
   aguardandoSenha = false;
@@ -141,6 +162,8 @@ function renderDefinirSenha(){
 
 // ---- ROTEAMENTO POR PAPEL ---------------------------------------------------
 async function routeBySession(session){
+  // Garante o tempo mínimo do splash apenas no primeiro roteamento.
+  if(primeiroRoteamento){ primeiroRoteamento = false; await ensureSplashDone(); }
   if(!session){ renderLogin(); return; }
   if(aguardandoSenha){ renderDefinirSenha(); return; }
   loading('Entrando…');
@@ -160,7 +183,7 @@ async function routeBySession(session){
 
 // ---- INIT -------------------------------------------------------------------
 async function init(){
-  loading();
+  splash();
   // Reage a login/logout, convite e recuperação de senha.
   supabase.auth.onAuthStateChange((event, sess) => {
     if(event === 'PASSWORD_RECOVERY'){ aguardandoSenha = true; renderDefinirSenha(); return; }

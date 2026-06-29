@@ -56,8 +56,9 @@ button{font-family:inherit}
 .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
   padding:4px 10px;border-radius:999px;white-space:nowrap}
 .badge .dot{width:6px;height:6px;border-radius:50%}
-.badge.solicitada{background:var(--st-solic-bg);color:var(--st-solic-fg)}
-.badge.solicitada .dot{background:var(--st-solic-dot)}
+/* "Solicitada" em laranja para chamar atenção (precisa de ação) */
+.badge.solicitada{background:var(--terracota-subtle);color:var(--terracota-dark)}
+.badge.solicitada .dot{background:var(--terracota)}
 .badge.em_emissao{background:var(--st-emiss-bg);color:var(--st-emiss-fg)}
 .badge.em_emissao .dot{background:var(--st-emiss-dot)}
 .badge.aguardando_conferencia{background:#EAF0F6;color:#3A5A7A}
@@ -86,6 +87,15 @@ button{font-family:inherit}
 @keyframes spin{to{transform:rotate(360deg)}}
 .center-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
 
+/* splash de abertura (apresenta a marca por ~2s ao abrir o app) */
+.splash{position:fixed;inset:0;background:var(--grafite-top);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;padding:30px;text-align:center;z-index:9999;
+  animation:fadein .25s ease}
+.splash-logo{height:40px;opacity:.97}
+.splash-prod{color:var(--terracota);font-size:15px;font-weight:600;letter-spacing:.02em}
+.splash-msg{color:rgba(255,255,255,.55);font-size:13px;max-width:280px;line-height:1.55;margin-top:4px}
+.splash .spinner{border-color:rgba(255,255,255,.18);border-top-color:var(--terracota);margin-top:4px}
+
 /* ============================================================
    LOGIN / ONBOARDING (mobile-first, centralizado)
    ============================================================ */
@@ -108,13 +118,13 @@ button{font-family:inherit}
 .cli-shell{min-height:100vh}
 .cli-side{display:none} /* mobile: sem sidebar (item 1) */
 
-/* cabeçalho do topo — FIXO no celular (acompanha a rolagem) */
-.cli-top{background:var(--grafite-top);padding:14px 18px;display:flex;align-items:center;
+/* cabeçalho do topo — FIXO no celular (acompanha a rolagem), mais alto */
+.cli-top{background:var(--grafite-top);padding:15px 18px;display:flex;align-items:center;
   justify-content:space-between;gap:10px;position:sticky;top:0;z-index:30}
-.cli-top-brand{display:flex;align-items:center;gap:9px;min-width:0}
-.cli-top-logo{height:24px;display:block}
-.cli-top-prod{color:rgba(255,255,255,.7);font-size:12px;font-weight:600;white-space:nowrap;
-  border-left:1px solid rgba(255,255,255,.22);padding-left:9px}
+.cli-top-brand{display:flex;align-items:center;gap:10px;min-width:0}
+.cli-top-mark{height:30px;width:30px;flex:none;display:block}
+.cli-top-logo{display:none}
+.cli-top-prod{color:#fff;font-size:15px;font-weight:700;white-space:nowrap;letter-spacing:.01em}
 .cli-top-nome{color:#fff;font-size:13px;font-weight:600;max-width:90px;overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 .cli-title{display:none} /* no mobile mostramos o logo, não o título */
@@ -338,10 +348,9 @@ button{font-family:inherit}
 /* ---- barra superior + inferior do escritório no CELULAR (ocultas no desktop) */
 .an-topbar{display:none}
 .an-bottomnav{display:none}
-.an-topbar img{height:24px}
-.an-topbar-brand{display:flex;align-items:center;gap:9px;min-width:0}
-.an-topbar-prod{color:rgba(255,255,255,.7);font-size:12px;font-weight:600;white-space:nowrap;
-  border-left:1px solid rgba(255,255,255,.22);padding-left:9px}
+.an-topbar-brand{display:flex;align-items:center;gap:10px;min-width:0}
+.an-topbar-mark{height:30px;width:30px;flex:none}
+.an-topbar-prod{color:#fff;font-size:15px;font-weight:700;white-space:nowrap;letter-spacing:.01em}
 .an-topbar-user{display:flex;align-items:center;gap:10px;background:none;border:none;cursor:pointer;
   font-family:inherit;padding:0}
 .an-topbar-user .nm{color:#fff;font-size:13px;font-weight:600;max-width:120px;overflow:hidden;
@@ -356,7 +365,9 @@ button{font-family:inherit}
 .an-bottomnav .bn-item svg{width:22px;height:22px}
 .an-bottomnav .bn-item > span:not(.bn-badge):not(.bn-ic){max-width:100%;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;line-height:1.1}
-.an-bottomnav .bn-item.active{color:var(--terracota)}
+/* separação clara entre os módulos + marcação forte do ativo */
+.an-bottomnav .bn-item + .bn-item{border-left:1px solid var(--line)}
+.an-bottomnav .bn-item.active{color:var(--terracota);background:var(--terracota-subtle)}
 .an-bottomnav .bn-item.active svg{stroke:var(--terracota)}
 .bn-badge{position:absolute;top:4px;right:calc(50% - 22px);min-width:17px;height:17px;border-radius:999px;
   background:var(--terracota);color:#fff;font-size:10.5px;font-weight:700;display:inline-flex;
@@ -446,6 +457,24 @@ button{font-family:inherit}
 .tbl-row .svc{font-size:13.5px;color:var(--chumbo)}
 .tbl-row .val{font-size:14.5px;font-weight:700;text-align:right}
 .tbl-row .st{text-align:right}
+/* separação um pouco mais forte entre as linhas da Fila */
+.tbl-fila .tbl-row{border-bottom:1px solid var(--line-2)}
+
+/* lista compacta de cadastros (Clientes/Tomadores): Nome + meta, toque p/ abrir */
+.cad-list{background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(57,57,59,.07);overflow:hidden}
+.cad-row{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line-2);
+  cursor:pointer;transition:background .12s ease}
+.cad-row:last-child{border-bottom:none}
+.cad-row:hover{background:#FBFAF9}
+.cad-row .cad-main{flex:1;min-width:0}
+.cad-nm{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cad-meta{font-size:12.5px;color:var(--mist);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.cad-go{color:var(--mist);width:18px;flex:none;display:flex}
+/* aviso quando a busca varre todos os status (inclui canceladas) */
+.an-busca-hint{display:flex;align-items:center;gap:8px;margin:10px 0 0;padding:8px 12px;
+  background:var(--st-solic-bg);border-radius:8px;font-size:12.5px;color:var(--chumbo)}
+.an-busca-hint svg{width:15px;height:15px;flex:none;color:var(--mist)}
+.an-busca-hint strong{color:var(--grafite)}
 
 /* detalhe analista */
 .det{display:flex;flex-direction:column;min-height:100vh}
@@ -505,9 +534,10 @@ button{font-family:inherit}
   .an{flex-direction:column;min-height:100vh}
   .an-side{display:none}                 /* sidebar é só desktop */
   .an-topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
-    padding:10px 16px;background:var(--grafite-top);position:sticky;top:0;z-index:30}
+    padding:14px 16px;background:var(--grafite-top);position:sticky;top:0;z-index:30}
   .an-bottomnav{display:flex;position:fixed;left:0;right:0;bottom:0;height:62px;background:#fff;
-    border-top:1px solid var(--line);z-index:30;padding-bottom:env(safe-area-inset-bottom)}
+    border-top:1px solid var(--line-2);z-index:30;padding-bottom:env(safe-area-inset-bottom);
+    box-shadow:0 -2px 10px rgba(57,57,59,.05)}
   .an-main{padding-bottom:74px;overflow-x:hidden}   /* espaço p/ a barra; sem rolagem lateral */
 
   /* cabeçalho da tela: título e busca empilhados, largura total */
@@ -532,10 +562,10 @@ button{font-family:inherit}
   /* tabelas viram lista: cabeçalho some; linhas empilham (sem overflow) */
   .tbl-head{display:none}
   .tbl .tbl-row{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:14px}
-  /* FILA: card 2×2 — cliente/tomador à esquerda (com reticências),
-     valor/status à direita numa coluna estreita. Nada vaza para os lados. */
+  /* FILA: card compacto 2×2 — cliente/tomador à esquerda (com reticências),
+     valor/status à direita. Linhas mais baixas → cabem mais por tela. */
   .tbl-fila .tbl-row{display:grid;grid-template-columns:minmax(0,1fr) auto;
-    grid-template-rows:auto auto;gap:4px 12px;align-items:center}
+    grid-template-rows:auto auto;gap:2px 12px;align-items:center;padding:11px 14px}
   .tbl-fila .tbl-row > div{min-width:0}
   .tbl-fila .tbl-row > div:nth-child(1){grid-area:1/1}   /* cliente */
   .tbl-fila .tbl-row > div:nth-child(2){grid-area:2/1}   /* tomador */
@@ -544,6 +574,11 @@ button{font-family:inherit}
   .tbl-fila .tbl-row .st{grid-area:2/2;justify-self:end}
   .tbl-fila .tbl-row .cli-nm,.tbl-fila .tbl-row .tom,
   .tbl-fila .tbl-row > div > .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* mais compacto: doc do tomador só no detalhe; fontes um pouco menores */
+  .tbl-fila .tbl-row > div:nth-child(2) .sub{display:none}
+  .tbl-fila .tbl-row .cli-nm{font-size:14px}
+  .tbl-fila .tbl-row .tom{font-size:13.5px}
+  .tbl-fila .tbl-row .sub{font-size:11.5px;margin-top:0}
 
   /* detalhe empilha em coluna única */
   .det{min-height:auto}

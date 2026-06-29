@@ -70,12 +70,12 @@ function renderShell(){
   // Os cadastros (Clientes/Tomadores/Equipe) entram numa folha ("Cadastros").
   const bn = (nav, ico, label, extra='') =>
     `<button class="bn-item${nav==='fila'?' active':''}" data-nav="${nav}">${ico}<span>${label}</span>${extra}</button>`;
+  // Configurações sai da barra (não é do dia a dia) e vai para o menu do usuário.
   const bottomNav = [
     bn('fila', ICON.list, 'Fila', `<span class="bn-badge muted" id="bn-fila" hidden></span>`),
     pode.conferir() ? bn('conferencia', ICON.check, 'Conferir', `<span class="bn-badge" id="bn-conf" hidden></span>`) : '',
     bn('notas', ICON.file, 'Notas'),
     `<button class="bn-item bn-cad" data-sheet="cadastros"><span class="bn-ic">${ICON.building}</span><span>Cadastros</span></button>`,
-    pode.admin() ? bn('config', ICON.settings, 'Config') : '',
   ].filter(Boolean).join('');
 
   CTX.root.innerHTML = `
@@ -94,8 +94,8 @@ function renderShell(){
       </aside>
       <header class="an-topbar">
         <div class="an-topbar-brand">
-          <img src="assets/logo-horizontal-white.png" alt="Maradel">
-          <span class="an-topbar-prod">Emissor NFS-e</span>
+          <img class="an-topbar-mark" src="assets/logo-mark.png" alt="Maradel">
+          <span class="an-topbar-prod">Emissor de Notas</span>
         </div>
         <button class="an-topbar-user" id="an-acct" title="Conta">
           <span class="nm">${esc(nome.split(' ')[0])}</span>
@@ -107,9 +107,13 @@ function renderShell(){
     </div>`;
   const sair = async () => { await api.signOut(); location.reload(); };
   CTX.root.querySelector('#an-logout').onclick = sair;
-  // Conta (mobile): toca no nome/avatar → folha com "Sair da conta".
+  // Conta (mobile): toca no nome/avatar → folha com Configurações (admin) + Sair.
   CTX.root.querySelector('#an-acct').onclick = () =>
-    openContaSheet({ nome, papelLabel: roleLabel(CTX.profile.role), onSair: sair });
+    openContaSheet({
+      nome, papelLabel: roleLabel(CTX.profile.role),
+      acoes: pode.admin() ? [{ label:'Configurações', sub:'Contato de atendimento', icon: ICON.settings, onClick: showConfiguracoes }] : [],
+      onSair: sair,
+    });
   // Folha de Cadastros (mobile): Clientes / Tomadores / Equipe.
   CTX.root.querySelector('[data-sheet="cadastros"]').onclick = abrirFolhaCadastros;
   // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
@@ -170,9 +174,15 @@ function abrirFolhaCadastros(){
 async function showFila(){
   setNav(CTX.status==='emitida' ? 'notas' : CTX.status==='aguardando_conferencia' ? 'conferencia' : 'fila');
   main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
+  // 3 grupos de status. "Solicitadas" também inclui as devolvidas (em_emissao),
+  // que precisam de ação. Ao BUSCAR, a consulta varre todos os status — assim
+  // as canceladas ficam acessíveis sem ocupar uma aba.
+  const GRUPOS = { solicitada:['solicitada','em_emissao'], aguardando_conferencia:['aguardando_conferencia'], emitida:['emitida'] };
+  const buscando = !!CTX.busca.trim();
+  const statusParam = buscando ? null : (GRUPOS[CTX.status] || CTX.status);
   const [cont, rows] = await Promise.all([
     api.contadoresPorStatus(),
-    api.listSolicitacoesAnalista({ status:CTX.status, busca:CTX.busca })
+    api.listSolicitacoesAnalista({ status:statusParam, busca:CTX.busca })
   ]);
   const hoje = new Date().toLocaleDateString('pt-BR',{ weekday:'long', day:'2-digit', month:'long' });
   // Título conforme a fila aberta.
@@ -197,19 +207,18 @@ async function showFila(){
         </div>
         <div class="an-search">${ICON.search}<input id="an-busca" placeholder="Buscar cliente, tomador ou CNPJ…" value="${esc(CTX.busca)}"></div>
       </div>
-      <div class="an-tabs">
-        ${tab('solicitada', cont.solicitada)}
-        ${tab('em_emissao', cont.em_emissao)}
-        ${pode.conferir() ? tab('aguardando_conferencia', cont.aguardando_conferencia) : ''}
-        ${tab('emitida', cont.emitida)}
-        ${tab('cancelada', cont.cancelada)}
+      <div class="an-tabs" ${buscando?'style="display:none"':''}>
+        ${tab('solicitada', cont.solicitada + cont.em_emissao, 'Solicitadas')}
+        ${pode.conferir() ? tab('aguardando_conferencia', cont.aguardando_conferencia, 'Em conferência') : ''}
+        ${tab('emitida', cont.emitida, 'Atendidas')}
       </div>
+      ${buscando?`<div class="an-busca-hint">${ICON.search}<span>Resultados de <strong>todos os status</strong> (inclui canceladas) para "${esc(CTX.busca)}"</span></div>`:''}
     </div>
     <div class="an-content">
       ${rows.length ? `
         <div class="tbl-head"><span>Cliente (prestador)</span><span>Tomador (recebe)</span><span>Serviço</span><span>Competência</span><span style="text-align:right">Valor</span><span style="text-align:right">Status</span></div>
         <div class="tbl tbl-fila">${rows.map(filaRow).join('')}</div>`
-       : filaEmpty(CTX.status)}
+       : (buscando ? `<div class="empty-mini">Nada encontrado para "${esc(CTX.busca)}".</div>` : filaEmpty(CTX.status))}
     </div>`;
 
   // contadores/abas
@@ -221,10 +230,8 @@ async function showFila(){
   main().querySelectorAll('[data-open]').forEach(r => r.onclick = () => showDetalhe(r.dataset.open));
 }
 
-function tab(status, n){
+function tab(status, n, label){
   const active = CTX.status===status;
-  // Rótulo curto para a aba de conferência (o nome completo é longo demais).
-  const label = status==='aguardando_conferencia' ? 'Conferência' : STATUS_LABEL[status];
   return `<button class="an-tab ${active?'active':''}" data-tab="${status}"><span>${label}</span><span class="cnt">${n}</span></button>`;
 }
 
@@ -236,7 +243,7 @@ function temRessalva(s){
 function filaRow(s){
   return `
     <div class="tbl-row" data-open="${s.id}">
-      <div><div class="cli-nm">${esc(s.cliente?.razao_social||'—')}</div><div class="sub">${relTime(s.created_at)}</div></div>
+      <div><div class="cli-nm">${esc(s.cliente?.razao_social||'—')}</div><div class="sub">Solicitada ${fmtDate(s.created_at)}</div></div>
       <div><div class="tom">${esc(s.tomador?.nome||'—')}</div><div class="sub">${esc(s.tomador?.doc||'')}</div></div>
       <div class="svc">${esc((s.descricao||'').slice(0,22))}${(s.descricao||'').length>22?'…':''}</div>
       <div class="comp svc">${fmtCompetenciaShort(s.competencia)}</div>
@@ -261,44 +268,58 @@ function filaEmpty(status){
 }
 
 // ---- CLIENTES ---------------------------------------------------------------
-// Lista os prestadores cadastrados e dá acesso ao cadastro de um novo cliente.
+// Lista compacta dos prestadores (Empresa · CNPJ · contato). Toque abre o
+// detalhe com todas as informações. Busca por empresa, CNPJ ou e-mail. A
+// exclusão (master) fica dentro do detalhe.
+let CLIENTES = [];
 async function showClientes(){
   setNav('clientes');
   main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
-  const clientes = await api.listClientes();
-  const master = pode.master();
-  const cols = master ? '2.2fr 1.6fr 1fr 1.8fr 60px' : '2.2fr 1.6fr 1fr 1.8fr';
+  CLIENTES = await api.listClientes();
+  const render = lista => lista.length
+    ? `<div class="cad-list">${lista.map(clienteRow).join('')}</div>`
+    : `<div class="empty-mini">Nenhum cliente encontrado.</div>`;
   main().innerHTML = `
     <div class="an-head">
       <div class="row1">
-        <div><h1>Clientes <span style="font-size:13px;font-weight:500;color:var(--mist)">· prestadores</span></h1><div class="day">${clientes.length} prestador(es) cadastrado(s)</div></div>
-        <button class="btn btn-primary btn-sm" id="cl-novo">${ICON.plus}<span>Novo cliente</span></button>
+        <div><h1>Clientes <span style="font-size:13px;font-weight:500;color:var(--mist)">· prestadores</span></h1><div class="day">${CLIENTES.length} prestador(es) cadastrado(s)</div></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div class="an-search">${ICON.search}<input id="cl-busca" placeholder="Buscar empresa, CNPJ ou e-mail…"></div>
+          <button class="btn btn-primary btn-sm" id="cl-novo">${ICON.plus}<span>Novo cliente</span></button>
+        </div>
       </div>
     </div>
     <div class="an-content">
-      ${clientes.length ? `
-        <div class="tbl-head" style="grid-template-columns:${cols}"><span>Razão social (prestador)</span><span>CNPJ</span><span>Regime</span><span>E-mail</span>${master?'<span></span>':''}</div>
-        <div class="tbl">${clientes.map(c=>`
-          <div class="tbl-row" style="grid-template-columns:${cols}" data-open-cli="${c.id}">
-            <div class="cli-nm">${esc(c.razao_social)}</div>
-            <div class="tom">${esc(c.cnpj)}</div>
-            <div class="svc">${esc(c.regime||'—')}</div>
-            <div class="svc">${esc(c.email||'—')}</div>
-            ${master?`<div style="text-align:right"><button class="icon-danger" data-del-cli="${c.id}" data-nm="${esc(c.razao_social)}" title="Excluir cliente">${ICON.x}</button></div>`:''}
-          </div>`).join('')}</div>`
+      ${CLIENTES.length ? `<div id="cl-list">${render(CLIENTES)}</div>`
         : `<div class="empty"><div class="ico"><span style="width:42px;height:42px">${ICON.users}</span></div>
             <h3>Nenhum cliente ainda</h3><p>Cadastre o primeiro prestador. Ele recebe um convite por e-mail para definir a senha.</p></div>`}
     </div>`;
   main().querySelector('#cl-novo').onclick = showNovoCliente;
-  // Linha do cliente → abre o detalhe (dados + acesso à prefeitura).
-  main().querySelectorAll('[data-open-cli]').forEach(r => r.onclick = () => showClienteDetalhe(r.dataset.openCli));
-  // Exclusão de cliente é exclusiva do master (item 1) — RLS também bloqueia.
-  main().querySelectorAll('[data-del-cli]').forEach(b => b.onclick = async (e) => {
-    e.stopPropagation();  // não abrir o detalhe ao clicar em excluir
-    if(!confirm(`Excluir o cliente "${b.dataset.nm}"? Esta ação remove o cadastro e não pode ser desfeita.`)) return;
-    try{ await api.excluirCliente(b.dataset.delCli); toast('Cliente excluído'); showClientes(); }
-    catch(e){ toast('Erro: '+e.message); }
-  });
+  const bindRows = () => main().querySelectorAll('[data-open-cli]').forEach(r =>
+    r.onclick = () => showClienteDetalhe(r.dataset.openCli));
+  bindRows();
+  const busca = main().querySelector('#cl-busca');
+  if(busca) busca.oninput = () => {
+    const b = busca.value.trim().toLowerCase();
+    const f = CLIENTES.filter(c =>
+      (c.razao_social||'').toLowerCase().includes(b) ||
+      (c.cnpj||'').toLowerCase().includes(b) ||
+      (c.email||'').toLowerCase().includes(b));
+    main().querySelector('#cl-list').innerHTML = render(f);
+    bindRows();
+  };
+}
+// Linha compacta de cliente: Empresa + (CNPJ · contato).
+function clienteRow(c){
+  const contato = c.email || c.telefone || '';
+  return `
+    <div class="cad-row" data-open-cli="${c.id}">
+      <div class="cad-main">
+        <div class="cad-nm">${esc(c.razao_social)}</div>
+        <div class="cad-meta">${esc(c.cnpj||'—')}${contato?' · '+esc(contato):''}</div>
+      </div>
+      <span class="cad-go">${ICON.chevR}</span>
+    </div>`;
 }
 
 // ---- DETALHE DO CLIENTE (lado equipe) — dados + ACESSO À PREFEITURA ---------
@@ -332,6 +353,7 @@ async function showClienteDetalhe(id){
           <div class="kv"><span class="k">Telefone</span><span class="v">${esc(c.telefone||'—')}</span></div>
         </div>
         <div id="cd-pref"></div>
+        ${pode.master()?`<button class="link-danger" id="cd-del" style="display:block;margin:26px auto 8px">Excluir este cliente</button>`:''}
       </div>
     </div>`;
   main().querySelector('#cd-back').onclick = showClientes;
@@ -339,6 +361,13 @@ async function showClienteDetalhe(id){
   const box = main().querySelector('#cd-pref');
   if(isAdmin) renderPrefeituraForm(box, id, pref);
   else        renderPrefeituraReadonly(box, id, pref, pode.conferir());
+  // Exclusão (master) — RLS também bloqueia para os demais papéis.
+  const del = main().querySelector('#cd-del');
+  if(del) del.onclick = async () => {
+    if(!confirm(`Excluir o cliente "${c.razao_social}"? Esta ação remove o cadastro e não pode ser desfeita.`)) return;
+    try{ await api.excluirCliente(id); toast('Cliente excluído'); showClientes(); }
+    catch(e){ toast('Erro: '+e.message); }
+  };
 }
 
 // Garante esquema https:// no link da prefeitura (evita abrir relativo).
@@ -520,18 +549,17 @@ async function showTomadores(){
   main().innerHTML = `<div style="padding:60px"><div class="spinner"></div></div>`;
   const [toms, clientes] = await Promise.all([ api.listTomadoresComCliente(), api.listClientes() ]);
   TOMS = toms;
-  const cols = '1.9fr 1.4fr 1.9fr 1.2fr 60px';
+  // Linha compacta: Tomador + (CNPJ · prestador). Toque abre o cadastro completo.
   const linha = t => `
-    <div class="tbl-row" style="grid-template-columns:${cols}" data-open-tom="${t.id}">
-      <div class="cli-nm">${esc(t.nome)}${t.exige_numero_pedido?` <span class="tom-flag" title="Exige número de pedido">nº pedido</span>`:''}</div>
-      <div class="tom">${esc(t.doc||'—')}</div>
-      <div class="svc">${esc(t.cliente?.razao_social||'— sem prestador')}</div>
-      <div class="svc">${esc(t.cidade||'—')}${t.uf?'/'+esc(t.uf):''}</div>
-      <div style="text-align:right"><button class="icon-danger" data-del-tom="${t.id}" data-nm="${esc(t.nome)}" title="Excluir tomador">${ICON.x}</button></div>
+    <div class="cad-row" data-open-tom="${t.id}">
+      <div class="cad-main">
+        <div class="cad-nm">${esc(t.nome)}${t.exige_numero_pedido?` <span class="tom-flag" title="Exige número de pedido">nº pedido</span>`:''}</div>
+        <div class="cad-meta">${esc(t.doc||'—')} · ${esc(t.cliente?.razao_social||'sem prestador')}</div>
+      </div>
+      <span class="cad-go">${ICON.chevR}</span>
     </div>`;
-  const tabela = lista => lista.length ? `
-    <div class="tbl-head" style="grid-template-columns:${cols}"><span>Tomador (recebe)</span><span>CNPJ / CPF</span><span>Prestador (cliente)</span><span>Cidade</span><span></span></div>
-    <div class="tbl">${lista.map(linha).join('')}</div>`
+  const tabela = lista => lista.length
+    ? `<div class="cad-list">${lista.map(linha).join('')}</div>`
     : `<div class="empty-mini">Nenhum tomador encontrado.</div>`;
 
   main().innerHTML = `
@@ -551,20 +579,8 @@ async function showTomadores(){
             <h3>Nenhum tomador ainda</h3><p>Cadastre um tomador e vincule a um prestador. Ele passa a aparecer para o cliente ao criar uma solicitação.</p></div>`}
     </div>`;
 
-  const bindRows = () => {
-    main().querySelectorAll('[data-open-tom]').forEach(r => r.onclick = () =>
-      showTomadorForm(TOMS.find(x=>x.id===r.dataset.openTom), clientes));
-    main().querySelectorAll('[data-del-tom]').forEach(b => b.onclick = async (e) => {
-      e.stopPropagation();
-      if(!confirm(`Excluir o tomador "${b.dataset.nm}"? Esta ação não pode ser desfeita.`)) return;
-      try{ await api.excluirTomador(b.dataset.delTom); toast('Tomador excluído'); showTomadores(); }
-      catch(err){
-        // FK on delete restrict: há solicitações usando este tomador.
-        const fk = /violates foreign key|restrict/i.test(err.message||'');
-        toast(fk ? 'Não dá para excluir: há solicitações usando este tomador.' : 'Erro: '+err.message);
-      }
-    });
-  };
+  const bindRows = () => main().querySelectorAll('[data-open-tom]').forEach(r => r.onclick = () =>
+    showTomadorForm(TOMS.find(x=>x.id===r.dataset.openTom), clientes));
   const novo = main().querySelector('#tm-novo');
   if(novo && clientes.length) novo.onclick = () => showTomadorForm(null, clientes);
   bindRows();
@@ -627,10 +643,20 @@ function showTomadorForm(tomador, clientes){
         <div style="font-size:12px;color:var(--mist);margin-top:8px">Se ligado, a solicitação sem número de pedido segue com ressalva e a Maradel só emite após o preenchimento.</div>
       </div>
       <button class="btn btn-primary btn-block" id="nt-save" style="margin-top:6px">${editando?'Salvar alterações':'Salvar tomador'}</button>
+      ${editando?`<button class="link-danger" id="nt-del" style="display:block;margin:16px auto 0">Excluir este tomador</button>`:''}
     </div>`;
   maskDocInput(main().querySelector('#nt-doc'));
   bindToggle(main(), 'nt-exige');
   main().querySelector('#nt-back').onclick = showTomadores;
+  const del = main().querySelector('#nt-del');
+  if(del) del.onclick = async () => {
+    if(!confirm(`Excluir o tomador "${t.nome}"? Esta ação não pode ser desfeita.`)) return;
+    try{ await api.excluirTomador(t.id); toast('Tomador excluído'); showTomadores(); }
+    catch(err){
+      const fk = /violates foreign key|restrict/i.test(err.message||'');
+      toast(fk ? 'Não dá para excluir: há solicitações usando este tomador.' : 'Erro: '+err.message);
+    }
+  };
   main().querySelector('#nt-save').onclick = async () => {
     const g = id => main().querySelector(id).value.trim();
     const nome = g('#nt-nome'), doc = g('#nt-doc');
