@@ -26,11 +26,18 @@
   </div>
   <div id="toast"></div>
   <script type="module" src="js/app.js"></script>
-  <!-- Registra o service worker (PWA). Só em http(s); ignora file:// e erros. -->
+  <!-- Registra o service worker (PWA) com atualização automática: quando uma
+       nova versão assume o controle, a página recarrega sozinha uma vez. -->
   <script>
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+      let recarregando = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (recarregando) return; recarregando = true; location.reload();
+      });
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+          .then((reg) => { reg.update().catch(() => {}); })
+          .catch(() => {});
       });
     }
   </script>

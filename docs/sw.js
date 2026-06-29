@@ -7,7 +7,7 @@
 //  (Supabase, CDNs) NÃO são interceptadas: passam direto pela rede.
 //  Suba o número da versão para forçar a limpeza do cache antigo ao publicar.
 // ============================================================
-const VERSION = 'maradel-v1';
+const VERSION = 'maradel-v3';
 const SHELL = [
   './',
   './index.html',
@@ -51,9 +51,10 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return; // Supabase/CDN passam direto
 
   e.respondWith(
-    fetch(req)
+    // cache:'no-store' força ir à REDE (ignora o cache HTTP do navegador), então
+    // online o app é SEMPRE a versão mais nova. O cache abaixo é só p/ offline.
+    fetch(req, { cache: 'no-store' })
       .then((res) => {
-        // Guarda uma cópia atualizada no cache para uso offline.
         const copy = res.clone();
         caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
         return res;
