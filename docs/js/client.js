@@ -22,8 +22,12 @@ const TAB_TITLE = {
 
 // Ponto de entrada: monta o shell do cliente. Faz onboarding se necessário.
 export async function mountCliente(root, profile){
-  CTX = { profile, cliente:null, root, tab:'dashboard' };
-  CTX.cliente = await api.getMeuCliente();
+  CTX = { profile, cliente:null, root, tab:'dashboard', contato:null };
+  const [cliente, contato] = await Promise.all([
+    api.getMeuCliente(),
+    api.getConfigAtendimento().catch(()=>null),
+  ]);
+  CTX.cliente = cliente; CTX.contato = contato;
   if(!CTX.cliente){ return renderSemCadastro(); }
   renderShell();
   showDashboard();
@@ -69,10 +73,8 @@ function renderShell(){
           <h1 class="cli-title" id="cli-title">Início</h1>
           <div class="cli-profile">
             <div class="info"><div class="nm">${esc(nome)}</div><div class="rl">Prestador</div></div>
-            <span class="cli-top-nome">${esc(nome.split(' ')[0])}</span>
             <button id="cli-ajuda" class="logout" title="Ajuda desta tela">${ICON.help}</button>
-            <button id="cli-conta" class="ava" title="Minha conta">${initials(nome)}</button>
-            <button id="cli-logout" class="logout" title="Sair da conta">${ICON.logout}</button>
+            <button id="cli-conta" class="ava" title="Conta">${initials(nome)}</button>
           </div>
         </header>
         <div id="cli-view"></div>
@@ -81,7 +83,6 @@ function renderShell(){
           <button class="item" data-tab="solicitacoes"><span class="nav-ic">${ICON.list}<span class="nb-bubble" id="sb-nav" hidden></span></span><span>Solicitações</span></button>
           <button class="item item-nova" data-tab="nova"><span class="navplus">${ICON.plus}</span><span>Nova</span></button>
           <button class="item" data-tab="tomadores">${ICON.users}<span>Cadastros</span></button>
-          <button class="item" data-tab="conta">${ICON.user}<span>Conta</span></button>
         </nav>
       </div>
     </div>`;
@@ -89,16 +90,19 @@ function renderShell(){
   // Sair: padronizado com o escritório — abre a folha de Conta com confirmação
   // (evita saída acidental). A sidebar do desktop também usa a folha.
   const sair = async () => { await api.signOut(); location.reload(); };
+  // Avatar → menu da conta: Minha conta, Treinamentos e Sair (Conta saiu da barra).
   const abrirConta = () => openContaSheet({ nome, papelLabel:'Prestador',
-    acoes: [{ label:'Treinamentos', sub:'Vídeos e ajuda do app', icon: ICON.help, onClick: () => openAjuda('completo') }],
+    acoes: [
+      { label:'Minha conta', sub:'Seus dados e senha', icon: ICON.user, onClick: showMinhaConta },
+      { label:'Treinamentos', sub:'Vídeos e ajuda do app', icon: ICON.help, onClick: () => openAjuda('completo') },
+    ],
     onSair: sair });
-  CTX.root.querySelector('#cli-logout').onclick = abrirConta;
   CTX.root.querySelector('#cli-logout-side').onclick = abrirConta;
-  // Ajuda contextual da tela atual.
+  // Ajuda contextual da tela atual (com o contato de atendimento embutido).
   CTX.root.querySelector('#cli-ajuda').onclick = () =>
-    openAjuda('cli-' + (CTX.tab==='dashboard' ? 'inicio' : (CTX.tab||'inicio')));
-  // O avatar (iniciais) é identidade, não saída: leva à "Minha conta".
-  CTX.root.querySelector('#cli-conta').onclick = () => showMinhaConta();
+    openAjuda('cli-' + (CTX.tab==='dashboard' ? 'inicio' : (CTX.tab||'inicio')), { contato: CTX.contato });
+  // O avatar abre o menu da conta (Minha conta, Treinamentos, Sair).
+  CTX.root.querySelector('#cli-conta').onclick = abrirConta;
 
   // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
   CTX.root.querySelector('#cli-toggle').onclick = () => {
@@ -116,6 +120,12 @@ function renderShell(){
     else if(t==='solicitacoes') showSolicitacoes();
     else if(t==='tomadores') showTomadores();
     else showMinhaConta();
+  });
+  // Mede a altura do cabeçalho fixo (faixa preta) para o filtro de solicitações
+  // grudar logo abaixo dele.
+  requestAnimationFrame(() => {
+    const top = CTX.root.querySelector('.cli-top'), cli = CTX.root.querySelector('.cli');
+    if(top && cli) cli.style.setProperty('--cli-top-h', top.offsetHeight + 'px');
   });
 }
 // Marca a aba ativa (em ambos os menus) e atualiza o título do cabeçalho.
@@ -155,34 +165,24 @@ const view = () => CTX.root.querySelector('#cli-view');
 async function showDashboard(){
   setActiveTab('dashboard');
   view().innerHTML = `<div class="cli-body"><div class="spinner" style="margin:60px auto"></div></div>`;
-  // Carrega solicitações e o contato de atendimento (item 5) em paralelo.
-  const [solics, contato] = await Promise.all([
-    api.listSolicitacoesCliente(CTX.cliente.id),
-    api.getConfigAtendimento().catch(()=>null)
-  ]);
+  const solics = await api.listSolicitacoesCliente(CTX.cliente.id);
 
-  // Faturamento mensal = soma do valor das solicitações emitidas, por competência.
-  const emitidas = solics.filter(s => s.status==='emitida');
-  const porMes = {};
-  emitidas.forEach(s => { porMes[s.competencia] = (porMes[s.competencia]||0) + Number(s.valor); });
-  const meses = Object.keys(porMes).sort().slice(-6);
-  const atual = currentCompetencia();
-  // Faturamento do MÊS ATUAL (só notas emitidas; canceladas nunca entram). Sem
-  // fallback para meses anteriores — se o mês está zerado (ex.: após cancelar a
-  // única nota), mostra R$ 0,00, coerente com o rótulo do mês.
-  const fatAtual = porMes[atual] || 0;
-
-  // Notas com ressalva (faltando número de pedido obrigatório) — item 4.
-  // Geram um card de alerta em destaque no topo do dashboard.
+  // Notas com ressalva (faltando número de pedido obrigatório) — card de alerta.
   const pendentes = solics.filter(temRessalva);
-  // Contadores do menu: a atender (laranja) e com ressalva (vermelho).
   const aAtender = solics.filter(s => s.status==='solicitada' && !temRessalva(s)).length;
   updateNavBadges(aAtender, pendentes.length);
 
+  const primeiro = CTX.profile.nome ? CTX.profile.nome.split(' ')[0] : '';
   view().innerHTML = `
     <div class="cli-body">
-      <div class="cli-hello">Olá${CTX.profile.nome?', '+esc(CTX.profile.nome.split(' ')[0]):''}</div>
-      <div class="cli-empresa">${esc(CTX.cliente.razao_social)}</div>
+      <div class="cli-brandline">
+        <img class="cli-brandline-logo" src="assets/logo-mark.png" alt="Maradel">
+        <div class="cli-brandline-tx">
+          <div class="prod">Emissor de Notas <span>· Grupo Maradel</span></div>
+          <div class="cli-emp">${esc(CTX.cliente.razao_social)}</div>
+        </div>
+      </div>
+      <div class="cli-hello">Olá${primeiro?', '+esc(primeiro):''} 👋</div>
 
       ${pendentes.length ? `
       <div class="card alert-card" id="cli-pend" role="button" tabindex="0">
@@ -196,15 +196,7 @@ async function showDashboard(){
         <span class="go">${ICON.chevR}</span>
       </div>` : ''}
 
-      <div class="card fat-card">
-        <div class="fat-label">Faturamento · ${fmtCompetencia(atual)}</div>
-        <div class="fat-value">${brl(fatAtual).replace(/(,\d{2})$/, m=>`<small>${m}</small>`)}</div>
-        ${renderChart(meses, porMes)}
-      </div>
-
-      ${ajudaCard(contato)}
-
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:6px 0 4px">
         <span class="section-title">Últimas solicitações</span>
       </div>
       ${solics.length ? `<div class="qlist">${QHEAD}${solics.slice(0,5).map(rowQueue).join('')}</div>`
@@ -348,8 +340,12 @@ async function showSolicitacoes(){
     <div class="subhead" style="position:static"><h2 style="margin-left:4px">Minhas solicitações</h2></div>
     <div class="cli-body">
       ${solics.length ? `
-        <div class="chip-row">
-          ${Object.entries(SOLIC_FILTROS).map(([k,v])=>`<button class="chip ${k===solicFiltro?'on':''}" data-filtro="${k}">${v.label}</button>`).join('')}
+        <div class="cli-filtro-bar">
+          <button class="cli-filtro" id="sf-btn">
+            <span class="ic">${ICON.list}</span>
+            <span class="tx">Mostrando: <strong id="sf-lbl">${SOLIC_FILTROS[solicFiltro].label}</strong></span>
+            <span class="cv">${ICON.chevD}</span>
+          </button>
         </div>
         <div id="solic-lista"></div>`
         : emptyState('list','Nenhuma solicitação ainda','Toque em "Nova solicitação" e a Maradel cuida da emissão.')}
@@ -357,12 +353,30 @@ async function showSolicitacoes(){
 
   if(solics.length){
     renderLista();
-    view().querySelectorAll('[data-filtro]').forEach(b => b.onclick = () => {
-      solicFiltro = b.dataset.filtro;
-      view().querySelectorAll('[data-filtro]').forEach(x => x.classList.toggle('on', x.dataset.filtro===solicFiltro));
+    // Cascata: abre a folha com as opções (Todas vem marcada por padrão).
+    view().querySelector('#sf-btn').onclick = () => abrirFiltroSolic(() => {
+      view().querySelector('#sf-lbl').textContent = SOLIC_FILTROS[solicFiltro].label;
       renderLista();
     });
   }
+}
+
+// Folha (cascata) para escolher o filtro das solicitações — sempre uma linha.
+function abrirFiltroSolic(onPick){
+  const itens = Object.entries(SOLIC_FILTROS).map(([k,v]) =>
+    `<button class="sheet-item" data-f="${k}">
+       <span class="sheet-tx"><span class="t">${v.label}</span></span>
+       ${k===solicFiltro?`<span class="sheet-ck">${ICON.check}</span>`:''}
+     </button>`).join('');
+  const ov = document.createElement('div');
+  ov.className = 'sheet-overlay';
+  ov.innerHTML = `<div class="sheet"><div class="sheet-grip"></div>
+    <div class="sheet-title">Mostrar solicitações</div>${itens}</div>`;
+  ov.addEventListener('click', e => { if(e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  ov.querySelectorAll('[data-f]').forEach(b => b.onclick = () => {
+    solicFiltro = b.dataset.f; ov.remove(); onPick();
+  });
 }
 
 // ---- NOVA SOLICITAÇÃO -------------------------------------------------------
@@ -519,13 +533,11 @@ async function showSolicitacao(id){
       </div>
       ${emitida ? `
         ${linkPublicoCard(nota.public_token)}
-        <div class="btn-row" style="margin-top:18px">
-          <button class="btn btn-primary" data-dl="pdf" ${nota.pdf_url?'':'disabled'}>${ICON.download}<span>PDF</span></button>
-          <button class="btn btn-outline" data-dl="xml" ${nota.xml_url?'':'disabled'}>${ICON.download}<span>XML</span></button>
-        </div>
-        <div class="btn-row" style="margin-top:12px">
-          <button class="btn btn-ghost" id="sd-email">${ICON.mail}<span>Enviar por e-mail</span></button>
-          <button class="btn btn-ghost" id="sd-whats">${ICON.whatsapp}<span>WhatsApp</span></button>
+        <div class="nota-acoes">
+          <button class="btn btn-outline btn-sm" data-dl="pdf" ${nota.pdf_url?'':'disabled'}>${ICON.download}<span>PDF</span></button>
+          <button class="btn btn-outline btn-sm" data-dl="xml" ${nota.xml_url?'':'disabled'}>${ICON.download}<span>XML</span></button>
+          <button class="btn btn-outline btn-sm" id="sd-email">${ICON.mail}<span>E-mail</span></button>
+          <button class="btn btn-outline btn-sm" id="sd-whats">${ICON.whatsapp}<span>WhatsApp</span></button>
         </div>` : `
         <div class="card" style="padding:14px 16px;margin-top:18px;display:flex;gap:9px;align-items:flex-start">
           <span style="color:var(--taupe);width:17px;flex:none">${ICON.info}</span>

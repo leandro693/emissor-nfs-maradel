@@ -169,16 +169,29 @@ export const AJUDA = {
   'cli-conta':        { titulo:'Minha conta', texto:'Seus dados de acesso, telefone/WhatsApp e troca de senha.', video:'' },
 };
 
-// Abre a ajuda de uma tela (modal com texto + vídeo, quando houver).
-export function openAjuda(key){
+// Abre a ajuda de uma tela (modal com texto + vídeo + contatos, quando houver).
+//   opts.contato: { nome, whatsapp, email } — exibe "falar com o atendimento".
+export function openAjuda(key, opts = {}){
   const a = AJUDA[key] || AJUDA.completo;
   const video = a.video
     ? `<div class="ajuda-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(a.video)}" title="${esc(a.titulo)}" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`
     : `<div class="ajuda-soon"><span style="width:18px">${ICON.party}</span><span>Vídeo de treinamento em breve.</span></div>`;
+  const c = opts.contato;
+  const wpp = c?.whatsapp ? `https://wa.me/${String(c.whatsapp).replace(/\D/g,'')}` : '';
+  const contatoHTML = (c && (wpp || c.email)) ? `
+    <div class="ajuda-contato">
+      <div class="ajuda-contato-t">Precisa falar com alguém?</div>
+      <div class="btn-row">
+        ${wpp?`<a class="btn btn-outline btn-sm" href="${esc(wpp)}" target="_blank" rel="noopener">${ICON.whatsapp}<span>${esc(c.nome||'Atendimento')}</span></a>`:''}
+        ${c.email?`<a class="btn btn-outline btn-sm" href="mailto:${esc(c.email)}">${ICON.mail}<span>E-mail</span></a>`:''}
+      </div>
+      <button class="ajuda-dev" id="aj-dev">${ICON.help}<span>Sobre o sistema · falar com o desenvolvedor</span></button>
+    </div>` : '';
   const m = openModal(`
     <div class="modal-head"><h3>${esc(a.titulo)}</h3><button class="modal-x" id="aj-x">${ICON.x}</button></div>
     <p class="modal-sub">${esc(a.texto)}</p>
     ${video}
+    ${contatoHTML}
     <div class="modal-actions">
       ${key!=='completo'?`<button class="btn btn-outline btn-block" id="aj-full">Ver treinamento completo</button>`:''}
       <button class="btn btn-primary btn-block" id="aj-ok">Fechar</button>
@@ -187,6 +200,15 @@ export function openAjuda(key){
   m.querySelector('#aj-ok').onclick = closeModal;
   const full = m.querySelector('#aj-full');
   if(full) full.onclick = () => openAjuda('completo');
+  const dev = m.querySelector('#aj-dev');
+  if(dev) dev.onclick = () => {
+    const m2 = openModal(`
+      <div class="modal-head"><h3>Sobre o sistema</h3><button class="modal-x" id="dv-x">${ICON.x}</button></div>
+      <p class="modal-sub">Este sistema foi <strong>desenvolvido pelo Grupo Maradel</strong> — Desenvolvimento de softwares sob medida. Em breve você poderá falar com nosso time comercial para soluções personalizadas.</p>
+      <div class="modal-actions"><button class="btn btn-primary btn-block" id="dv-ok">Entendi</button></div>`);
+    m2.querySelector('#dv-x').onclick = closeModal;
+    m2.querySelector('#dv-ok').onclick = closeModal;
+  };
 }
 
 // ---- FOLHA DE CONTA (bottom sheet) — usada no escritório e no cliente --------

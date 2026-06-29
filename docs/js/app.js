@@ -27,7 +27,7 @@ function loading(msg='Carregando…'){
 // empresa antes de entrar no produto. O tempo mínimo é garantido no 1º
 // roteamento (ensureSplashDone), independente da rapidez da sessão.
 const SPLASH_MIN_MS = 5000;
-let splashUntil = 0, primeiroRoteamento = true, splashTimer = null;
+let splashUntil = 0, iniciado = false, splashTimer = null;
 function splash(){
   splashUntil = Date.now() + SPLASH_MIN_MS;
   root.innerHTML = `
@@ -185,8 +185,6 @@ function renderDefinirSenha(){
 
 // ---- ROTEAMENTO POR PAPEL ---------------------------------------------------
 async function routeBySession(session){
-  // Garante o tempo mínimo do splash apenas no primeiro roteamento.
-  if(primeiroRoteamento){ primeiroRoteamento = false; await ensureSplashDone(); }
   if(!session){ renderLogin(); return; }
   if(aguardandoSenha){ renderDefinirSenha(); return; }
   loading('Entrando…');
@@ -205,18 +203,30 @@ async function routeBySession(session){
 }
 
 // ---- INIT -------------------------------------------------------------------
+// Monta o app UMA única vez no carregamento (após o splash). Evita a "dupla
+// montagem" que causava o efeito de F5 logo após entrar: tanto o getSession
+// quanto o evento SIGNED_IN inicial chamavam o roteamento. Aqui o primeiro a
+// chegar assume; o outro é ignorado.
+async function iniciarUmaVez(session){
+  if(iniciado) return;
+  iniciado = true;
+  await ensureSplashDone();
+  await routeBySession(session);
+}
+
 async function init(){
   splash();
   // Reage a login/logout, convite e recuperação de senha.
   supabase.auth.onAuthStateChange((event, sess) => {
     if(event === 'PASSWORD_RECOVERY'){ aguardandoSenha = true; renderDefinirSenha(); return; }
     if(event === 'SIGNED_IN'){
+      if(!iniciado){ iniciarUmaVez(sess); return; }   // absorvido pela abertura
       if(aguardandoSenha){ renderDefinirSenha(); return; }
-      routeBySession(sess);
+      routeBySession(sess);                            // login real (após abertura)
     }
-    if(event === 'SIGNED_OUT') renderLogin();
+    if(event === 'SIGNED_OUT'){ iniciado = true; renderLogin(); }
   });
   const session = await api.getSession();
-  await routeBySession(session);
+  iniciarUmaVez(session);
 }
 init();
