@@ -146,6 +146,49 @@ export function nomeExibicao(profile, fallback='Usuário'){
     .map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ') || fallback;
 }
 
+// ---- AJUDA / TREINAMENTOS ---------------------------------------------------
+// Conteúdo por tela (texto + vídeo). Para publicar um vídeo, cole o ID do
+// YouTube (recomendado: vídeo "não listado") no campo `video`. Enquanto vazio,
+// mostra "em breve". É só editar este objeto — sem mexer no resto do código.
+//   Ex.: video:'dQw4w9WgXcQ'  (o trecho depois de "watch?v=")
+export const AJUDA = {
+  completo:      { titulo:'Treinamento completo', texto:'Visão geral do sistema, do início ao fim — para quem está começando.', video:'' },
+  // — Equipe (escritório) —
+  fila:          { titulo:'Fila de solicitações', texto:'Onde chegam as solicitações dos clientes. Toque numa linha para ver os dados e emitir a nota. Use as abas para alternar entre Solicitadas, Conferência e Atendidas; a busca encontra qualquer status (inclui canceladas).', video:'' },
+  conferencia:   { titulo:'Conferência', texto:'Aqui o analista revisa o que o auxiliar preparou e libera (ou devolve) a emissão.', video:'' },
+  notas:         { titulo:'Notas emitidas', texto:'Histórico das notas atendidas. Em breve: filtro por período e por cliente.', video:'' },
+  clientes:      { titulo:'Clientes (prestadores)', texto:'Cadastro dos prestadores. Toque para ver os detalhes e o acesso à prefeitura. Use a busca para localizar por empresa, CNPJ ou e-mail.', video:'' },
+  tomadores:     { titulo:'Tomadores', texto:'Cadastro de quem recebe a nota, vinculado a um prestador. O mesmo tomador pode existir para vários prestadores. O vínculo aparece para o cliente na nova solicitação.', video:'' },
+  equipe:        { titulo:'Equipe', texto:'Gestão dos usuários internos e seus papéis (master, admin, analista, auxiliar).', video:'' },
+  config:        { titulo:'Configurações', texto:'Contato de atendimento exibido ao cliente em "Precisa de ajuda?".', video:'' },
+  // — Cliente (prestador) —
+  'cli-inicio':       { titulo:'Início', texto:'Seu painel: faturamento do mês, atalho de ajuda e suas últimas solicitações.', video:'' },
+  'cli-nova':         { titulo:'Nova solicitação', texto:'Escolha o tomador, descreva o serviço, informe valor e competência. A Maradel emite e avisa você.', video:'' },
+  'cli-solicitacoes': { titulo:'Minhas solicitações', texto:'Acompanhe todas as suas solicitações e baixe a nota (PDF/XML) quando emitida.', video:'' },
+  'cli-tomadores':    { titulo:'Cadastro de tomadores', texto:'Cadastre quem recebe suas notas. Depois é só selecionar na nova solicitação.', video:'' },
+  'cli-conta':        { titulo:'Minha conta', texto:'Seus dados de acesso, telefone/WhatsApp e troca de senha.', video:'' },
+};
+
+// Abre a ajuda de uma tela (modal com texto + vídeo, quando houver).
+export function openAjuda(key){
+  const a = AJUDA[key] || AJUDA.completo;
+  const video = a.video
+    ? `<div class="ajuda-video"><iframe src="https://www.youtube-nocookie.com/embed/${esc(a.video)}" title="${esc(a.titulo)}" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`
+    : `<div class="ajuda-soon"><span style="width:18px">${ICON.party}</span><span>Vídeo de treinamento em breve.</span></div>`;
+  const m = openModal(`
+    <div class="modal-head"><h3>${esc(a.titulo)}</h3><button class="modal-x" id="aj-x">${ICON.x}</button></div>
+    <p class="modal-sub">${esc(a.texto)}</p>
+    ${video}
+    <div class="modal-actions">
+      ${key!=='completo'?`<button class="btn btn-outline btn-block" id="aj-full">Ver treinamento completo</button>`:''}
+      <button class="btn btn-primary btn-block" id="aj-ok">Fechar</button>
+    </div>`);
+  m.querySelector('#aj-x').onclick = closeModal;
+  m.querySelector('#aj-ok').onclick = closeModal;
+  const full = m.querySelector('#aj-full');
+  if(full) full.onclick = () => openAjuda('completo');
+}
+
 // ---- FOLHA DE CONTA (bottom sheet) — usada no escritório e no cliente --------
 // Mostra nome + papel, ações opcionais (ex.: Configurações — fora do dia a dia)
 // e um botão claro "Sair da conta", com confirmação para evitar saída acidental.

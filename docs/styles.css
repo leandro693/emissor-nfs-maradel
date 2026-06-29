@@ -361,6 +361,7 @@ button{font-family:inherit}
 .an-topbar{display:none}
 .an-bottomnav{display:none}
 .an-topbar-brand{display:flex;align-items:center;gap:10px;min-width:0}
+.an-topbar-right{display:flex;align-items:center;gap:6px;flex:none}
 .an-topbar-mark{height:30px;width:30px;flex:none}
 .an-topbar-prod{color:#fff;font-size:15px;font-weight:700;white-space:nowrap;letter-spacing:.01em}
 .an-topbar-user{display:flex;align-items:center;gap:10px;background:none;border:none;cursor:pointer;
@@ -539,6 +540,18 @@ button{font-family:inherit}
 .mail-kv .v{color:var(--grafite);word-break:break-word}
 .mail-label{display:block;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
   color:var(--chumbo);margin:16px 0 8px}
+/* ajuda/treinamento: vídeo responsivo (16:9) + placeholder "em breve" */
+.ajuda-video{position:relative;width:100%;padding-top:56.25%;margin-top:14px;border-radius:12px;
+  overflow:hidden;background:#000}
+.ajuda-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.ajuda-soon{display:flex;align-items:center;gap:9px;margin-top:14px;padding:13px 14px;border-radius:10px;
+  background:var(--terracota-subtle);color:var(--terracota-dark);font-size:13px;font-weight:600}
+.ajuda-soon svg{stroke:var(--terracota-dark)}
+/* botão de ajuda "?" no topo (escritório e cliente) */
+.topbar-help{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.8);width:34px;height:34px;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.topbar-help:hover{background:rgba(255,255,255,.12);color:#fff}
+.topbar-help svg{width:20px;height:20px}
 
 /* responsivo: ESCRITÓRIO no celular — barra inferior fixa (como app), top bar
    enxuta e conteúdo sem vazar para os lados. */

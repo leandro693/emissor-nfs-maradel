@@ -8,7 +8,7 @@ import {
   fmtCompetencia, fmtCompetenciaShort, relTime, fmtDate, initials, badge,
   esc, toast, copyToClipboard, openEnvioEmail, openEnvioWhatsApp,
   ressalvaPill, statusTag, notaPublicUrl, linkPublicoCard, bindLinkPublico,
-  toggle, bindToggle, isToggleOn, fmtDateTime, openModal, closeModal, openContaSheet
+  toggle, bindToggle, isToggleOn, fmtDateTime, openModal, closeModal, openContaSheet, openAjuda
 } from './ui.js';
 
 let CTX = { profile:null, cliente:null, root:null, tab:'dashboard' };
@@ -70,6 +70,7 @@ function renderShell(){
           <div class="cli-profile">
             <div class="info"><div class="nm">${esc(nome)}</div><div class="rl">Prestador</div></div>
             <span class="cli-top-nome">${esc(nome.split(' ')[0])}</span>
+            <button id="cli-ajuda" class="logout" title="Ajuda desta tela">${ICON.help}</button>
             <button id="cli-conta" class="ava" title="Minha conta">${initials(nome)}</button>
             <button id="cli-logout" class="logout" title="Sair da conta">${ICON.logout}</button>
           </div>
@@ -88,9 +89,14 @@ function renderShell(){
   // Sair: padronizado com o escritório — abre a folha de Conta com confirmação
   // (evita saída acidental). A sidebar do desktop também usa a folha.
   const sair = async () => { await api.signOut(); location.reload(); };
-  const abrirConta = () => openContaSheet({ nome, papelLabel:'Prestador', onSair: sair });
+  const abrirConta = () => openContaSheet({ nome, papelLabel:'Prestador',
+    acoes: [{ label:'Treinamentos', sub:'Vídeos e ajuda do app', icon: ICON.help, onClick: () => openAjuda('completo') }],
+    onSair: sair });
   CTX.root.querySelector('#cli-logout').onclick = abrirConta;
   CTX.root.querySelector('#cli-logout-side').onclick = abrirConta;
+  // Ajuda contextual da tela atual.
+  CTX.root.querySelector('#cli-ajuda').onclick = () =>
+    openAjuda('cli-' + (CTX.tab==='dashboard' ? 'inicio' : (CTX.tab||'inicio')));
   // O avatar (iniciais) é identidade, não saída: leva à "Minha conta".
   CTX.root.querySelector('#cli-conta').onclick = () => showMinhaConta();
 
@@ -856,6 +862,7 @@ function showMinhaConta(){
 
   view().querySelector('#mc-sair').onclick = () => openContaSheet({
     nome: CTX.profile.nome || CTX.cliente.razao_social, papelLabel:'Prestador',
+    acoes: [{ label:'Treinamentos', sub:'Vídeos e ajuda do app', icon: ICON.help, onClick: () => openAjuda('completo') }],
     onSair: async () => { await api.signOut(); location.reload(); } });
 }
 

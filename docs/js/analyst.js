@@ -7,7 +7,7 @@ import {
   ICON, brl, fmtCompetencia, fmtCompetenciaShort, fmtDate, fmtDateTime, relTime, initials, badge,
   esc, toast, copyToClipboard, maskDocInput, openEnvioEmail, openEnvioWhatsApp,
   ressalvaPill, statusTag, notaPublicUrl, linkPublicoCard, bindLinkPublico, STATUS_LABEL,
-  roleLabel, nomeExibicao, openContaSheet, openModal, closeModal, toggle, bindToggle, isToggleOn
+  roleLabel, nomeExibicao, openContaSheet, openAjuda, openModal, closeModal, toggle, bindToggle, isToggleOn
 } from './ui.js';
 
 let CTX = { profile:null, root:null, status:'solicitada', busca:'' };
@@ -89,7 +89,8 @@ function renderShell(){
         <div class="user">
           <div class="ava">${initials(nome)}</div>
           <div style="min-width:0"><div class="nm">${esc(nome)}</div><div class="rl">${roleLabel(CTX.profile.role)}</div></div>
-          <button id="an-logout" title="Sair" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;width:20px;height:20px">${ICON.logout}</button>
+          <button class="an-ajuda" title="Ajuda desta tela" style="margin-left:auto;background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;width:20px;height:20px">${ICON.help}</button>
+          <button id="an-logout" title="Sair" style="background:none;border:none;color:rgba(255,255,255,.5);cursor:pointer;width:20px;height:20px">${ICON.logout}</button>
         </div>
       </aside>
       <header class="an-topbar">
@@ -97,23 +98,32 @@ function renderShell(){
           <img class="an-topbar-mark" src="assets/logo-mark.png" alt="Maradel">
           <span class="an-topbar-prod">Emissor de Notas</span>
         </div>
-        <button class="an-topbar-user" id="an-acct" title="Conta">
-          <span class="nm">${esc(nome.split(' ')[0])}</span>
-          <span class="ava">${initials(nome)}</span>
-        </button>
+        <div class="an-topbar-right">
+          <button class="topbar-help an-ajuda" title="Ajuda desta tela">${ICON.help}</button>
+          <button class="an-topbar-user" id="an-acct" title="Conta">
+            <span class="nm">${esc(nome.split(' ')[0])}</span>
+            <span class="ava">${initials(nome)}</span>
+          </button>
+        </div>
       </header>
       <div class="an-main" id="an-main"></div>
       <nav class="an-bottomnav">${bottomNav}</nav>
     </div>`;
   const sair = async () => { await api.signOut(); location.reload(); };
   CTX.root.querySelector('#an-logout').onclick = sair;
-  // Conta (mobile): toca no nome/avatar → folha com Configurações (admin) + Sair.
+  // Conta (mobile): toca no nome/avatar → folha com Treinamentos, Configurações
+  // (admin) e Sair.
   CTX.root.querySelector('#an-acct').onclick = () =>
     openContaSheet({
       nome, papelLabel: roleLabel(CTX.profile.role),
-      acoes: pode.admin() ? [{ label:'Configurações', sub:'Contato de atendimento', icon: ICON.settings, onClick: showConfiguracoes }] : [],
+      acoes: [
+        { label:'Treinamentos', sub:'Vídeos e ajuda do sistema', icon: ICON.help, onClick: () => openAjuda('completo') },
+        ...(pode.admin() ? [{ label:'Configurações', sub:'Contato de atendimento', icon: ICON.settings, onClick: showConfiguracoes }] : []),
+      ],
       onSair: sair,
     });
+  // Botões de ajuda "?" (topo mobile + sidebar desktop) → ajuda da tela atual.
+  CTX.root.querySelectorAll('.an-ajuda').forEach(b => b.onclick = () => openAjuda(CTX.tela || 'fila'));
   // Folha de Cadastros (mobile): Clientes / Tomadores / Equipe.
   CTX.root.querySelector('[data-sheet="cadastros"]').onclick = abrirFolhaCadastros;
   // Retrair/expandir a sidebar (desktop) e lembrar a preferência.
@@ -139,6 +149,7 @@ function renderShell(){
 // Marca o item ativo na barra lateral e na barra inferior (mobile). O botão
 // "Cadastros" da barra inferior acende quando se está em qualquer cadastro.
 function setNav(nav){
+  CTX.tela = nav; // tela atual (usada pela ajuda contextual)
   CTX.root.querySelectorAll('[data-nav]').forEach(b =>
     b.classList.toggle('active', b.dataset.nav===nav));
   const cad = CTX.root.querySelector('.bn-cad');
